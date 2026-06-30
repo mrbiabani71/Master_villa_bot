@@ -135,22 +135,24 @@ def get_villa_by_code(villa_code: str) -> dict | None:
 
 def search_villas(
     area_type: str,
-    city: str,
     min_price: float,
     max_price: float | None,
+    city: str | None = None,
 ) -> list[dict]:
     query = """
         SELECT * FROM villas
         WHERE status = 'active'
           AND area_type = ?
-          AND city = ?
           AND price >= ?
     """
-    params: list = [area_type, city, min_price]
+    params: list = [area_type, min_price]
+    if city:
+        query += " AND city = ?"
+        params.append(city)
     if max_price is not None:
         query += " AND price <= ?"
         params.append(max_price)
-    query += " ORDER BY created_at DESC"
+    query += " ORDER BY price ASC, created_at DESC"
 
     with get_connection() as conn:
         rows = conn.execute(query, params).fetchall()

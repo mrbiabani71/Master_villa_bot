@@ -23,11 +23,18 @@ from utils import fmt_price
 
 # ── Keyboard ───────────────────────────────────────────────────────────────────
 
+BACK = "🔙 بازگشت"
+
 PHONE_KB = ReplyKeyboardMarkup(
-    [[KeyboardButton("📱 اشتراک‌گذاری شماره تماس", request_contact=True)]],
+    [
+        [KeyboardButton("📱 اشتراک‌گذاری شماره تماس", request_contact=True)],
+        [BACK],
+    ],
     resize_keyboard=True,
-    one_time_keyboard=True,
+    one_time_keyboard=False,
 )
+
+NAME_KB = ReplyKeyboardMarkup([[BACK]], resize_keyboard=True)
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -124,15 +131,28 @@ async def start_visit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         f"☎️ *درخواست بازدید — ویلا {villa['villa_code']}*\n\n"
         f"لطفاً نام و نام خانوادگی خود را وارد کنید:",
         parse_mode="Markdown",
-        reply_markup=ReplyKeyboardRemove(),
+        reply_markup=NAME_KB,
     )
     return VISIT_NAME
 
 
 async def handle_visit_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     name = update.message.text.strip()
+
+    if name == BACK:
+        context.user_data.pop("visit_villa", None)
+        context.user_data.pop("visit_name",  None)
+        await update.message.reply_text(
+            "به منوی اصلی بازگشتید.",
+            reply_markup=get_main_keyboard(update.effective_user.id),
+        )
+        return ConversationHandler.END
+
     if len(name) < 2:
-        await update.message.reply_text("لطفاً نام کامل خود را وارد کنید:")
+        await update.message.reply_text(
+            "لطفاً نام کامل خود را وارد کنید:",
+            reply_markup=NAME_KB,
+        )
         return VISIT_NAME
 
     context.user_data["visit_name"] = name
@@ -145,6 +165,18 @@ async def handle_visit_name(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 async def handle_visit_phone_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     raw    = update.message.text.strip()
+
+    if raw == BACK:
+        villa = context.user_data.get("visit_villa", {})
+        villa_code = villa.get("villa_code", "")
+        await update.message.reply_text(
+            f"☎️ *درخواست بازدید — ویلا {villa_code}*\n\n"
+            f"لطفاً نام و نام خانوادگی خود را وارد کنید:",
+            parse_mode="Markdown",
+            reply_markup=NAME_KB,
+        )
+        return VISIT_NAME
+
     digits = raw.replace("+", "").replace(" ", "").replace("-", "")
     if not digits.isdigit() or len(digits) < 10:
         await update.message.reply_text(
