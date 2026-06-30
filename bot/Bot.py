@@ -20,6 +20,7 @@ from admin.requests import cb_req_page, cb_req_contact, cb_req_delete
 from user.browse import build_browse_conv, browse_callback_handlers
 from user.visit import build_visit_conv, visit_callback_handlers
 from user.consultation import build_consultation_conv
+from user.faq import show_faq_menu, faq_callback_handlers
 
 FAQ_TEXT = (
     "❓ *سوالات پرتکرار*\n\n"
@@ -75,7 +76,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
     if text == "❓ سوالات پرتکرار":
-        await update.message.reply_text(FAQ_TEXT, parse_mode="Markdown")
+        await show_faq_menu(update, context)
 
     elif text == "ℹ️ درباره ما":
         await update.message.reply_text(ABOUT_TEXT, parse_mode="Markdown")
@@ -102,6 +103,10 @@ app.add_handler(build_add_villa_conv())
 app.add_handler(build_consultation_conv())
 app.add_handler(build_visit_conv())   # must precede browse callbacks (intercepts browse_visit_)
 app.add_handler(build_browse_conv())
+
+# ── Inline callbacks: FAQ ─────────────────────────────────────────────────────
+for handler in faq_callback_handlers():
+    app.add_handler(handler)
 
 # ── Inline callbacks: browse ───────────────────────────────────────────────────
 for handler in browse_callback_handlers():
