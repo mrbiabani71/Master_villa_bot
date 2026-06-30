@@ -23,6 +23,11 @@ from utils import fmt_price, price_category
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 AREA_TYPES = ["ساحلی", "جنگلی"]
+AREA_TYPE_LABELS = [
+    "🏖 ساحلی (محمودآباد، ایزدشهر، سرخرود)",
+    "🌲 جنگلی (آمل، چمستان، نور)",
+]
+AREA_TYPE_MAP = {label: value for label, value in zip(AREA_TYPE_LABELS, AREA_TYPES)}
 CITIES = ["محمودآباد", "سرخرود", "ایزدشهر", "نور", "آمل", "چمستان"]
 
 BUDGETS: list[tuple[str, float, float | None]] = [
@@ -36,7 +41,7 @@ BUDGET_MAP = {b[0]: (b[1], b[2]) for b in BUDGETS}
 
 # ── Search keyboards ───────────────────────────────────────────────────────────
 
-BROWSE_AREA_KB   = ReplyKeyboardMarkup([AREA_TYPES], resize_keyboard=True)
+BROWSE_AREA_KB   = ReplyKeyboardMarkup([[label] for label in AREA_TYPE_LABELS], resize_keyboard=True)
 BROWSE_CITY_KB   = ReplyKeyboardMarkup([CITIES[:3], CITIES[3:]], resize_keyboard=True)
 BROWSE_BUDGET_KB = ReplyKeyboardMarkup([[label] for label in BUDGET_LABELS], resize_keyboard=True)
 
@@ -194,12 +199,13 @@ async def start_browse(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 async def handle_browse_area(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = update.message.text.strip()
-    if text not in AREA_TYPES:
+    area_value = AREA_TYPE_MAP.get(text)
+    if area_value is None:
         await update.message.reply_text(
             "لطفاً یکی از گزینه‌های موجود را انتخاب کنید:", reply_markup=BROWSE_AREA_KB
         )
         return BROWSE_AREA
-    context.user_data["browse"]["area_type"] = text
+    context.user_data["browse"]["area_type"] = area_value
     await update.message.reply_text("🏙 شهر مورد نظر را انتخاب کنید:", reply_markup=BROWSE_CITY_KB)
     return BROWSE_CITY
 
@@ -330,7 +336,7 @@ async def cb_browse_placeholder(update: Update, context: ContextTypes.DEFAULT_TY
 def build_browse_conv() -> ConversationHandler:
     return ConversationHandler(
         entry_points=[
-            MessageHandler(filters.Regex("^🏡 جستجوی ویلا$"), start_browse),
+            MessageHandler(filters.Regex("^🔍 جستجو ویلا$"), start_browse),
         ],
         states={
             BROWSE_AREA:   [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_browse_area)],

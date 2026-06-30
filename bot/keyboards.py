@@ -3,11 +3,9 @@ from telegram import ReplyKeyboardMarkup
 from config import ADMIN_ID
 
 _user_menu = [
-    ["🏡 جستجوی ویلا"],
-    ["📄 دریافت کاتالوگ"],
-    ["🎥 ویدیوها"],
-    ["💰 قیمت روز"],
-    ["📞 مشاوره رایگان"],
+    ["🔍 جستجو ویلا"],
+    ["📩 درخواست مشاوره"],
+    ["❓ سوالات پرتکرار", "ℹ️ درباره ما"],
 ]
 
 _admin_menu = _user_menu + [["👑 پنل مدیریت"]]
