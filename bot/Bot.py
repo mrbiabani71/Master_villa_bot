@@ -21,6 +21,7 @@ from user.browse import build_browse_conv, browse_callback_handlers
 from user.visit import build_visit_conv, visit_callback_handlers
 from user.consultation import build_consultation_conv
 from user.faq import show_faq_menu, faq_callback_handlers
+from channel_importer import channel_import_handler
 
 FAQ_TEXT = (
     "❓ *سوالات پرتکرار*\n\n"
@@ -120,6 +121,9 @@ for handler in visit_callback_handlers():
 app.add_handler(CallbackQueryHandler(cb_req_page,    pattern="^req_page_"))
 app.add_handler(CallbackQueryHandler(cb_req_contact, pattern="^req_contact_"))
 app.add_handler(CallbackQueryHandler(cb_req_delete,  pattern="^req_del_"))
+
+# ── Channel import (must be before general message handler) ───────────────────
+app.add_handler(channel_import_handler())
 
 # ── Command + general message ─────────────────────────────────────────────────
 app.add_handler(CommandHandler("start", start))
