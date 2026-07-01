@@ -283,12 +283,15 @@ def parse_villa_text(text: str) -> VillaData:
         if not claimed:
             unknown_lines.append(line)
 
-    # Build description: explicit + unmatched lines
+    # Build description: explicit text + display features + unmatched lines.
+    # Display features are informational and must be preserved here too.
     parts: list[str] = []
     if data.description:
         parts.append(data.description)
+    if data.features:
+        parts.extend(data.features)
     if unknown_lines:
-        parts.append("\n".join(unknown_lines))
+        parts.extend(unknown_lines)
     data.description = "\n".join(parts).strip()
 
     return data
