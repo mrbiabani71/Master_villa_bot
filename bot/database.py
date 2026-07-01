@@ -47,11 +47,12 @@ def init_db() -> None:
             );
         """)
 
-        _add_column_if_missing(conn, "villas", "has_jacuzzi",    "INTEGER NOT NULL DEFAULT 0")
-        _add_column_if_missing(conn, "villas", "has_roof_garden", "INTEGER NOT NULL DEFAULT 0")
-        _add_column_if_missing(conn, "villas", "has_parking",    "INTEGER NOT NULL DEFAULT 0")
-        _add_column_if_missing(conn, "villas", "has_storage",    "INTEGER NOT NULL DEFAULT 0")
-        _add_column_if_missing(conn, "villas", "updated_at",     "TEXT DEFAULT (datetime('now'))")
+        _add_column_if_missing(conn, "villas", "has_jacuzzi",      "INTEGER NOT NULL DEFAULT 0")
+        _add_column_if_missing(conn, "villas", "has_roof_garden",  "INTEGER NOT NULL DEFAULT 0")
+        _add_column_if_missing(conn, "villas", "has_parking",      "INTEGER NOT NULL DEFAULT 0")
+        _add_column_if_missing(conn, "villas", "has_storage",      "INTEGER NOT NULL DEFAULT 0")
+        _add_column_if_missing(conn, "villas", "master_bedrooms",  "INTEGER DEFAULT 0")
+        _add_column_if_missing(conn, "villas", "updated_at",       "TEXT DEFAULT (datetime('now'))")
 
         conn.execute("""
             CREATE TABLE IF NOT EXISTS visit_requests (
@@ -93,7 +94,7 @@ def insert_villa(data: dict) -> int:
             """
             INSERT INTO villas (
                 villa_code, city, area_type, price,
-                land_size, building_size, bedrooms,
+                land_size, building_size, bedrooms, master_bedrooms,
                 is_townhouse, has_pool, has_jacuzzi,
                 has_roof_garden, has_parking, has_storage,
                 document_type, description,
@@ -102,7 +103,7 @@ def insert_villa(data: dict) -> int:
                 created_at, updated_at
             ) VALUES (
                 :villa_code, :city, :area_type, :price,
-                :land_size, :building_size, :bedrooms,
+                :land_size, :building_size, :bedrooms, :master_bedrooms,
                 :is_townhouse, :has_pool, :has_jacuzzi,
                 :has_roof_garden, :has_parking, :has_storage,
                 :document_type, :description,
@@ -111,7 +112,7 @@ def insert_villa(data: dict) -> int:
                 datetime('now'), datetime('now')
             )
             """,
-            {**data, "photos_str": photos_str},
+            {**data, "photos_str": photos_str, "master_bedrooms": data.get("master_bedrooms") or 0},
         )
         conn.commit()
         return cursor.lastrowid
