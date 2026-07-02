@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * API specification
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import * as zod from 'zod';
 
@@ -21,7 +21,7 @@ export const HealthCheckResponse = zod.object({
  * @summary List all villas
  */
 export const ListVillasQueryParams = zod.object({
-  "status": zod.enum(['active', 'inactive']).optional(),
+  "status": zod.enum(['draft', 'published', 'sold', 'archived']).optional(),
   "city": zod.coerce.string().optional(),
   "area_type": zod.coerce.string().optional()
 })
@@ -35,6 +35,7 @@ export const ListVillasResponseItem = zod.object({
   "land_size": zod.number().nullish(),
   "building_size": zod.number().nullish(),
   "bedrooms": zod.number().nullish(),
+  "master_bedrooms": zod.number().nullish(),
   "is_townhouse": zod.number(),
   "has_pool": zod.number(),
   "has_jacuzzi": zod.number(),
@@ -47,11 +48,92 @@ export const ListVillasResponseItem = zod.object({
   "longitude": zod.number().nullish(),
   "photos": zod.string().nullish(),
   "video": zod.string().nullish(),
-  "status": zod.string(),
+  "status": zod.enum(['draft', 'published', 'sold', 'archived']),
   "created_at": zod.string(),
   "updated_at": zod.string()
 })
 export const ListVillasResponse = zod.array(ListVillasResponseItem)
+
+
+/**
+ * @summary Create a new villa
+ */
+export const createVillaBodyIsTownhouseDefault = 0;
+export const createVillaBodyHasPoolDefault = 0;
+export const createVillaBodyHasJacuzziDefault = 0;
+export const createVillaBodyHasRoofGardenDefault = 0;
+export const createVillaBodyHasParkingDefault = 0;
+export const createVillaBodyHasStorageDefault = 0;
+
+export const CreateVillaBody = zod.object({
+  "city": zod.string().nullish(),
+  "area_type": zod.string().nullish(),
+  "price": zod.number().nullish(),
+  "land_size": zod.number().nullish(),
+  "building_size": zod.number().nullish(),
+  "bedrooms": zod.number().nullish(),
+  "master_bedrooms": zod.number().nullish(),
+  "is_townhouse": zod.number().default(createVillaBodyIsTownhouseDefault),
+  "has_pool": zod.number().default(createVillaBodyHasPoolDefault),
+  "has_jacuzzi": zod.number().default(createVillaBodyHasJacuzziDefault),
+  "has_roof_garden": zod.number().default(createVillaBodyHasRoofGardenDefault),
+  "has_parking": zod.number().default(createVillaBodyHasParkingDefault),
+  "has_storage": zod.number().default(createVillaBodyHasStorageDefault),
+  "document_type": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "photos": zod.string().nullish(),
+  "video": zod.string().nullish(),
+  "status": zod.enum(['draft', 'published', 'sold', 'archived']).optional()
+})
+
+export const CreateVillaResponse = zod.object({
+  "id": zod.number(),
+  "villa_code": zod.string(),
+  "city": zod.string().nullish(),
+  "area_type": zod.string().nullish(),
+  "price": zod.number().nullish(),
+  "land_size": zod.number().nullish(),
+  "building_size": zod.number().nullish(),
+  "bedrooms": zod.number().nullish(),
+  "master_bedrooms": zod.number().nullish(),
+  "is_townhouse": zod.number(),
+  "has_pool": zod.number(),
+  "has_jacuzzi": zod.number(),
+  "has_roof_garden": zod.number(),
+  "has_parking": zod.number(),
+  "has_storage": zod.number(),
+  "document_type": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "photos": zod.string().nullish(),
+  "video": zod.string().nullish(),
+  "status": zod.enum(['draft', 'published', 'sold', 'archived']),
+  "created_at": zod.string(),
+  "updated_at": zod.string()
+})
+
+
+/**
+ * @summary Get villa statistics summary
+ */
+export const GetVillaStatsResponse = zod.object({
+  "total": zod.number(),
+  "published": zod.number(),
+  "draft": zod.number(),
+  "sold": zod.number(),
+  "archived": zod.number(),
+  "by_city": zod.array(zod.object({
+  "city": zod.string(),
+  "count": zod.number()
+})),
+  "by_price_tier": zod.array(zod.object({
+  "tier": zod.string(),
+  "count": zod.number()
+}))
+})
 
 
 /**
@@ -70,6 +152,7 @@ export const GetVillaResponse = zod.object({
   "land_size": zod.number().nullish(),
   "building_size": zod.number().nullish(),
   "bedrooms": zod.number().nullish(),
+  "master_bedrooms": zod.number().nullish(),
   "is_townhouse": zod.number(),
   "has_pool": zod.number(),
   "has_jacuzzi": zod.number(),
@@ -82,21 +165,79 @@ export const GetVillaResponse = zod.object({
   "longitude": zod.number().nullish(),
   "photos": zod.string().nullish(),
   "video": zod.string().nullish(),
-  "status": zod.string(),
+  "status": zod.enum(['draft', 'published', 'sold', 'archived']),
   "created_at": zod.string(),
   "updated_at": zod.string()
 })
 
 
 /**
- * @summary Update villa status
+ * @summary Update all villa fields
+ */
+export const UpdateVillaParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateVillaBody = zod.object({
+  "city": zod.string().nullish(),
+  "area_type": zod.string().nullish(),
+  "price": zod.number().nullish(),
+  "land_size": zod.number().nullish(),
+  "building_size": zod.number().nullish(),
+  "bedrooms": zod.number().nullish(),
+  "master_bedrooms": zod.number().nullish(),
+  "is_townhouse": zod.number().nullish(),
+  "has_pool": zod.number().nullish(),
+  "has_jacuzzi": zod.number().nullish(),
+  "has_roof_garden": zod.number().nullish(),
+  "has_parking": zod.number().nullish(),
+  "has_storage": zod.number().nullish(),
+  "document_type": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "photos": zod.string().nullish(),
+  "video": zod.string().nullish(),
+  "status": zod.enum(['draft', 'published', 'sold', 'archived']).optional()
+})
+
+export const UpdateVillaResponse = zod.object({
+  "id": zod.number(),
+  "villa_code": zod.string(),
+  "city": zod.string().nullish(),
+  "area_type": zod.string().nullish(),
+  "price": zod.number().nullish(),
+  "land_size": zod.number().nullish(),
+  "building_size": zod.number().nullish(),
+  "bedrooms": zod.number().nullish(),
+  "master_bedrooms": zod.number().nullish(),
+  "is_townhouse": zod.number(),
+  "has_pool": zod.number(),
+  "has_jacuzzi": zod.number(),
+  "has_roof_garden": zod.number(),
+  "has_parking": zod.number(),
+  "has_storage": zod.number(),
+  "document_type": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "photos": zod.string().nullish(),
+  "video": zod.string().nullish(),
+  "status": zod.enum(['draft', 'published', 'sold', 'archived']),
+  "created_at": zod.string(),
+  "updated_at": zod.string()
+})
+
+
+/**
+ * @summary Update villa status only
  */
 export const UpdateVillaStatusParams = zod.object({
   "id": zod.coerce.number()
 })
 
 export const UpdateVillaStatusBody = zod.object({
-  "status": zod.enum(['active', 'inactive'])
+  "status": zod.enum(['draft', 'published', 'sold', 'archived'])
 })
 
 export const UpdateVillaStatusResponse = zod.object({
@@ -108,6 +249,7 @@ export const UpdateVillaStatusResponse = zod.object({
   "land_size": zod.number().nullish(),
   "building_size": zod.number().nullish(),
   "bedrooms": zod.number().nullish(),
+  "master_bedrooms": zod.number().nullish(),
   "is_townhouse": zod.number(),
   "has_pool": zod.number(),
   "has_jacuzzi": zod.number(),
@@ -120,27 +262,44 @@ export const UpdateVillaStatusResponse = zod.object({
   "longitude": zod.number().nullish(),
   "photos": zod.string().nullish(),
   "video": zod.string().nullish(),
-  "status": zod.string(),
+  "status": zod.enum(['draft', 'published', 'sold', 'archived']),
   "created_at": zod.string(),
   "updated_at": zod.string()
 })
 
 
 /**
- * @summary Get villa statistics summary
+ * @summary Archive a villa — sets status to archived, never permanently deletes
  */
-export const GetVillaStatsResponse = zod.object({
-  "total": zod.number(),
-  "active": zod.number(),
-  "inactive": zod.number(),
-  "by_city": zod.array(zod.object({
-  "city": zod.string(),
-  "count": zod.number()
-})),
-  "by_price_tier": zod.array(zod.object({
-  "tier": zod.string(),
-  "count": zod.number()
-}))
+export const ArchiveVillaParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ArchiveVillaResponse = zod.object({
+  "id": zod.number(),
+  "villa_code": zod.string(),
+  "city": zod.string().nullish(),
+  "area_type": zod.string().nullish(),
+  "price": zod.number().nullish(),
+  "land_size": zod.number().nullish(),
+  "building_size": zod.number().nullish(),
+  "bedrooms": zod.number().nullish(),
+  "master_bedrooms": zod.number().nullish(),
+  "is_townhouse": zod.number(),
+  "has_pool": zod.number(),
+  "has_jacuzzi": zod.number(),
+  "has_roof_garden": zod.number(),
+  "has_parking": zod.number(),
+  "has_storage": zod.number(),
+  "document_type": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "photos": zod.string().nullish(),
+  "video": zod.string().nullish(),
+  "status": zod.enum(['draft', 'published', 'sold', 'archived']),
+  "created_at": zod.string(),
+  "updated_at": zod.string()
 })
 
 

@@ -3,15 +3,17 @@
  * Do not edit manually.
  * Api
  * API specification
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import type { VillaStatsByCityItem } from './villaStatsByCityItem';
 import type { VillaStatsByPriceTierItem } from './villaStatsByPriceTierItem';
 
 export interface VillaStats {
   total: number;
-  active: number;
-  inactive: number;
+  published: number;
+  draft: number;
+  sold: number;
+  archived: number;
   by_city: VillaStatsByCityItem[];
   by_price_tier: VillaStatsByPriceTierItem[];
 }

@@ -1,26 +1,94 @@
-import { useGetVilla } from "@workspace/api-client-react";
-import { useParams, Link } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  useGetVilla,
+  useUpdateVillaStatus,
+  useArchiveVilla,
+  getListVillasQueryKey,
+} from "@workspace/api-client-react";
+import { useParams, Link, useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatTomans, formatDate } from "@/lib/format";
-import { 
-  ArrowLeft, MapPin, Building2, Trees, Ruler, BedDouble, 
-  CarFront, Waves, Droplets, SunMedium, Package, FileText, Calendar 
+import {
+  ArrowLeft,
+  MapPin,
+  Building2,
+  Trees,
+  Ruler,
+  BedDouble,
+  CarFront,
+  Waves,
+  Droplets,
+  SunMedium,
+  Package,
+  FileText,
+  Calendar,
+  Pencil,
+  Archive,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
+import {
+  STATUS_LABELS,
+  STATUS_BADGE_CLASSES,
+  ALL_STATUSES,
+  type VillaStatus,
+} from "@/lib/villa-status";
 
 export default function VillaDetail() {
   const { id } = useParams<{ id: string }>();
   const villaId = parseInt(id, 10);
+  const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data: villa, isLoading, error } = useGetVilla(villaId, {
-    query: {
-      enabled: !isNaN(villaId),
-      queryKey: [villaId],
-    }
+    query: { enabled: !isNaN(villaId), queryKey: [villaId] },
   });
+
+  const updateStatus = useUpdateVillaStatus();
+  const archiveVilla = useArchiveVilla();
+
+  const handleStatusChange = (newStatus: VillaStatus) => {
+    updateStatus.mutate(
+      { id: villaId, data: { status: newStatus } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListVillasQueryKey() });
+          toast({ title: "Status updated", description: `Villa is now ${STATUS_LABELS[newStatus]}.` });
+        },
+      }
+    );
+  };
+
+  const handleArchive = () => {
+    if (!confirm(`Archive ${villa?.villa_code}? It will be hidden from the bot but never deleted.`)) return;
+    archiveVilla.mutate(
+      { id: villaId },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListVillasQueryKey() });
+          toast({ title: "Villa archived", description: "The villa has been archived and removed from bot listings." });
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Failed to archive villa.", variant: "destructive" });
+        },
+      }
+    );
+  };
 
   if (isLoading) {
     return (
@@ -40,8 +108,12 @@ export default function VillaDetail() {
   if (error || !villa) {
     return (
       <div className="p-8 text-center max-w-2xl mx-auto mt-20">
-        <h2 className="text-2xl font-bold text-destructive mb-2">Property Not Found</h2>
-        <p className="text-muted-foreground mb-6">The villa you are looking for does not exist or an error occurred.</p>
+        <h2 className="text-2xl font-bold text-destructive mb-2">
+          Property Not Found
+        </h2>
+        <p className="text-muted-foreground mb-6">
+          The villa you are looking for does not exist or an error occurred.
+        </p>
         <Button asChild>
           <Link href="/villas">Back to Properties</Link>
         </Button>
@@ -49,11 +121,17 @@ export default function VillaDetail() {
     );
   }
 
-  const photos = villa.photos ? villa.photos.split(',') : [];
+  const photos = villa.photos ? villa.photos.split(",").filter(Boolean) : [];
+  const status = villa.status as VillaStatus;
+  const isArchived = status === "archived";
 
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
-      <Button variant="ghost" className="pl-0 gap-2 text-muted-foreground hover:text-foreground" asChild>
+      <Button
+        variant="ghost"
+        className="pl-0 gap-2 text-muted-foreground hover:text-foreground"
+        asChild
+      >
         <Link href="/villas">
           <ArrowLeft className="h-4 w-4" /> Back to Inventory
         </Link>
@@ -61,11 +139,16 @@ export default function VillaDetail() {
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <Badge className={villa.status === 'active' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-muted text-muted-foreground hover:bg-muted'}>
-              {villa.status.toUpperCase()}
+          <div className="flex items-center gap-3 mb-2 flex-wrap">
+            <Badge
+              variant="outline"
+              className={`font-semibold ${STATUS_BADGE_CLASSES[status] ?? ""}`}
+            >
+              {STATUS_LABELS[status] ?? status}
             </Badge>
-            <span className="font-mono text-xl font-bold text-primary">{villa.villa_code}</span>
+            <span className="font-mono text-xl font-bold text-primary">
+              {villa.villa_code}
+            </span>
           </div>
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight flex items-center gap-2">
             <MapPin className="h-7 w-7 text-muted-foreground" />
@@ -73,11 +156,56 @@ export default function VillaDetail() {
           </h1>
         </div>
         <div className="text-right">
-          <p className="text-sm uppercase tracking-wider text-muted-foreground font-semibold mb-1">Asking Price</p>
-          <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400" dir="rtl">
+          <p className="text-sm uppercase tracking-wider text-muted-foreground font-semibold mb-1">
+            Asking Price
+          </p>
+          <p
+            className="text-3xl font-bold text-emerald-600 dark:text-emerald-400"
+            dir="rtl"
+          >
             {formatTomans(villa.price)}
           </p>
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3 items-center p-4 bg-muted/30 rounded-lg border">
+        <span className="text-sm font-medium text-muted-foreground mr-2">
+          Change Status:
+        </span>
+        <Select
+          value={status}
+          onValueChange={(v) => handleStatusChange(v as VillaStatus)}
+          disabled={updateStatus.isPending}
+        >
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ALL_STATUSES.map((s) => (
+              <SelectItem key={s} value={s}>
+                {STATUS_LABELS[s]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Button variant="outline" className="gap-2" asChild>
+          <Link href={`/villas/${villaId}/edit`}>
+            <Pencil className="h-4 w-4" /> Edit
+          </Link>
+        </Button>
+
+        {!isArchived && (
+          <Button
+            variant="outline"
+            className="gap-2 text-amber-600 border-amber-300 hover:bg-amber-50 hover:text-amber-700"
+            onClick={handleArchive}
+            disabled={archiveVilla.isPending}
+          >
+            <Archive className="h-4 w-4" />
+            {archiveVilla.isPending ? "Archiving..." : "Archive"}
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -86,7 +214,9 @@ export default function VillaDetail() {
             <div className="bg-muted aspect-video relative flex items-center justify-center border-b">
               {photos.length > 0 ? (
                 <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
-                  <span className="text-zinc-50 font-medium">Image preview not available in admin context</span>
+                  <span className="text-zinc-50 font-medium">
+                    Image preview not available in admin context
+                  </span>
                   <div className="absolute bottom-4 right-4 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-md">
                     {photos.length} Photos Attached
                   </div>
@@ -99,16 +229,26 @@ export default function VillaDetail() {
               )}
             </div>
             <CardContent className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Property Description</h3>
-              <p className="text-foreground/80 leading-relaxed whitespace-pre-wrap font-medium" dir="rtl">
+              <h3 className="text-lg font-semibold mb-4">
+                Property Description
+              </h3>
+              <p
+                className="text-foreground/80 leading-relaxed whitespace-pre-wrap font-medium"
+                dir="rtl"
+              >
                 {villa.description || "No description provided."}
               </p>
-              
+
               {villa.latitude && villa.longitude && (
                 <div className="mt-6">
                   <Button variant="outline" className="w-full gap-2" asChild>
-                    <a href={`https://www.google.com/maps?q=${villa.latitude},${villa.longitude}`} target="_blank" rel="noopener noreferrer">
-                      <MapPin className="h-4 w-4 text-blue-500" /> View on Google Maps
+                    <a
+                      href={`https://www.google.com/maps?q=${villa.latitude},${villa.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <MapPin className="h-4 w-4 text-blue-500" /> View on
+                      Google Maps
                     </a>
                   </Button>
                 </div>
@@ -129,35 +269,47 @@ export default function VillaDetail() {
                     <Ruler className="h-4 w-4" />
                     <span className="text-sm">Land Area</span>
                   </div>
-                  <span className="font-semibold">{villa.land_size ? `${villa.land_size} m²` : '-'}</span>
+                  <span className="font-semibold">
+                    {villa.land_size ? `${villa.land_size} m²` : "-"}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center p-4">
                   <div className="flex items-center gap-3 text-muted-foreground">
                     <Building2 className="h-4 w-4" />
                     <span className="text-sm">Built Area</span>
                   </div>
-                  <span className="font-semibold">{villa.building_size ? `${villa.building_size} m²` : '-'}</span>
+                  <span className="font-semibold">
+                    {villa.building_size ? `${villa.building_size} m²` : "-"}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center p-4">
                   <div className="flex items-center gap-3 text-muted-foreground">
                     <BedDouble className="h-4 w-4" />
                     <span className="text-sm">Bedrooms</span>
                   </div>
-                  <span className="font-semibold">{villa.bedrooms || '-'}</span>
+                  <span className="font-semibold">{villa.bedrooms || "-"}</span>
                 </div>
                 <div className="flex justify-between items-center p-4">
                   <div className="flex items-center gap-3 text-muted-foreground">
-                    {villa.area_type === 'ساحلی' ? <Waves className="h-4 w-4 text-blue-500" /> : <Trees className="h-4 w-4 text-green-500" />}
+                    {villa.area_type === "ساحلی" ? (
+                      <Waves className="h-4 w-4 text-blue-500" />
+                    ) : (
+                      <Trees className="h-4 w-4 text-green-500" />
+                    )}
                     <span className="text-sm">Area Type</span>
                   </div>
-                  <span className="font-semibold" dir="rtl">{villa.area_type || '-'}</span>
+                  <span className="font-semibold" dir="rtl">
+                    {villa.area_type || "-"}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center p-4">
                   <div className="flex items-center gap-3 text-muted-foreground">
                     <FileText className="h-4 w-4" />
                     <span className="text-sm">Document</span>
                   </div>
-                  <span className="font-semibold" dir="rtl">{villa.document_type || '-'}</span>
+                  <span className="font-semibold" dir="rtl">
+                    {villa.document_type || "-"}
+                  </span>
                 </div>
               </div>
             </CardContent>
@@ -168,24 +320,29 @@ export default function VillaDetail() {
               <CardTitle className="text-lg">Amenities & Features</CardTitle>
             </CardHeader>
             <CardContent className="p-4 grid grid-cols-2 gap-4">
-              <div className={`flex items-center gap-2 text-sm ${villa.has_pool ? 'text-foreground font-medium' : 'text-muted-foreground/50 line-through'}`}>
-                <Waves className="h-4 w-4" /> Pool
-              </div>
-              <div className={`flex items-center gap-2 text-sm ${villa.has_jacuzzi ? 'text-foreground font-medium' : 'text-muted-foreground/50 line-through'}`}>
-                <Droplets className="h-4 w-4" /> Jacuzzi
-              </div>
-              <div className={`flex items-center gap-2 text-sm ${villa.has_roof_garden ? 'text-foreground font-medium' : 'text-muted-foreground/50 line-through'}`}>
-                <SunMedium className="h-4 w-4" /> Roof Garden
-              </div>
-              <div className={`flex items-center gap-2 text-sm ${villa.has_parking ? 'text-foreground font-medium' : 'text-muted-foreground/50 line-through'}`}>
-                <CarFront className="h-4 w-4" /> Parking
-              </div>
-              <div className={`flex items-center gap-2 text-sm ${villa.has_storage ? 'text-foreground font-medium' : 'text-muted-foreground/50 line-through'}`}>
-                <Package className="h-4 w-4" /> Storage
-              </div>
-              <div className={`flex items-center gap-2 text-sm ${villa.is_townhouse ? 'text-foreground font-medium' : 'text-muted-foreground/50 line-through'}`}>
-                <Building2 className="h-4 w-4" /> Townhouse
-              </div>
+              {[
+                { flag: villa.has_pool, label: "Pool", Icon: Waves },
+                { flag: villa.has_jacuzzi, label: "Jacuzzi", Icon: Droplets },
+                {
+                  flag: villa.has_roof_garden,
+                  label: "Roof Garden",
+                  Icon: SunMedium,
+                },
+                { flag: villa.has_parking, label: "Parking", Icon: CarFront },
+                { flag: villa.has_storage, label: "Storage", Icon: Package },
+                {
+                  flag: villa.is_townhouse,
+                  label: "Townhouse",
+                  Icon: Building2,
+                },
+              ].map(({ flag, label, Icon }) => (
+                <div
+                  key={label}
+                  className={`flex items-center gap-2 text-sm ${flag ? "text-foreground font-medium" : "text-muted-foreground/50 line-through"}`}
+                >
+                  <Icon className="h-4 w-4" /> {label}
+                </div>
+              ))}
             </CardContent>
           </Card>
 

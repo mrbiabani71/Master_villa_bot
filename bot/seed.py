@@ -33,7 +33,7 @@ SAMPLE_VILLAS = [
         "longitude": 52.2586,
         "photos":    "",
         "video":     "",
-        "status":    "active",
+        "status":    "published",
     },
     {
         "villa_code":    "MV-1002",
@@ -58,7 +58,7 @@ SAMPLE_VILLAS = [
         "longitude": None,
         "photos":    "",
         "video":     "",
-        "status":    "active",
+        "status":    "published",
     },
     {
         "villa_code":    "MV-1003",
@@ -83,7 +83,7 @@ SAMPLE_VILLAS = [
         "longitude": 51.9854,
         "photos":    "",
         "video":     "",
-        "status":    "active",
+        "status":    "published",
     },
     {
         "villa_code":    "MV-1004",
@@ -108,7 +108,7 @@ SAMPLE_VILLAS = [
         "longitude": None,
         "photos":    "",
         "video":     "",
-        "status":    "active",
+        "status":    "published",
     },
     {
         "villa_code":    "MV-1005",
@@ -134,7 +134,7 @@ SAMPLE_VILLAS = [
         "longitude": 52.0100,
         "photos":    "",
         "video":     "",
-        "status":    "active",
+        "status":    "published",
     },
 ]
 

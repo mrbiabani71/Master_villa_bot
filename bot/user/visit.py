@@ -116,7 +116,7 @@ async def start_visit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         return ConversationHandler.END
 
     villa = get_villa_by_id(villa_id)
-    if not villa or villa.get("status") != "active":
+    if not villa or villa.get("status") != "published":
         await query.message.reply_text("⚠️ این ویلا در حال حاضر در دسترس نیست.")
         return ConversationHandler.END
 

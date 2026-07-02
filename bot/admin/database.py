@@ -41,7 +41,7 @@ def init_db() -> None:
                 longitude     REAL,
                 photos        TEXT,
                 video         TEXT,
-                status        TEXT NOT NULL DEFAULT 'active',
+                status        TEXT NOT NULL DEFAULT 'published',
                 created_at    TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
             );
@@ -67,7 +67,6 @@ def init_db() -> None:
             );
         """)
 
-        # Safe migrations for existing rows
         _add_column_if_missing(conn, "visit_requests", "area_type",    "TEXT DEFAULT ''")
         _add_column_if_missing(conn, "visit_requests", "request_type", "TEXT DEFAULT 'visit'")
         _add_column_if_missing(conn, "visit_requests", "status",       "TEXT DEFAULT 'pending'")
@@ -107,7 +106,7 @@ def insert_villa(data: dict) -> int:
                 :has_roof_garden, :has_parking, :has_storage,
                 :document_type, :description,
                 :latitude, :longitude,
-                :photos_str, :video, 'active',
+                :photos_str, :video, 'published',
                 datetime('now'), datetime('now')
             )
             """,
@@ -141,7 +140,7 @@ def search_villas(
 ) -> list[dict]:
     query = """
         SELECT * FROM villas
-        WHERE status = 'active'
+        WHERE status = 'published'
           AND area_type = ?
           AND city = ?
           AND price >= ?
@@ -186,11 +185,6 @@ def get_requests(
     status_filter: str | None = None,
     type_filter: str | None = None,
 ) -> list[dict]:
-    """Return paginated requests joined with villa price, newest first.
-
-    Filtering hooks: pass status_filter='pending'|'contacted' or
-    type_filter='visit'|'consultation' to narrow results later.
-    """
     conditions = []
     params: list = []
 

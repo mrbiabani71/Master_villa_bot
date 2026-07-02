@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * API specification
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 export interface HealthStatus {
   status: string;
@@ -12,6 +12,16 @@ export interface HealthStatus {
 export interface ErrorResponse {
   error: string;
 }
+
+export type VillaStatus = typeof VillaStatus[keyof typeof VillaStatus];
+
+
+export const VillaStatus = {
+  draft: 'draft',
+  published: 'published',
+  sold: 'sold',
+  archived: 'archived',
+} as const;
 
 export interface Villa {
   id: number;
@@ -22,6 +32,7 @@ export interface Villa {
   land_size?: number | null;
   building_size?: number | null;
   bedrooms?: number | null;
+  master_bedrooms?: number | null;
   is_townhouse: number;
   has_pool: number;
   has_jacuzzi: number;
@@ -34,21 +45,59 @@ export interface Villa {
   longitude?: number | null;
   photos?: string | null;
   video?: string | null;
-  status: string;
+  status: VillaStatus;
   created_at: string;
   updated_at: string;
 }
 
-export type UpdateVillaStatusRequestStatus = typeof UpdateVillaStatusRequestStatus[keyof typeof UpdateVillaStatusRequestStatus];
+export interface CreateVillaRequest {
+  city?: string | null;
+  area_type?: string | null;
+  price?: number | null;
+  land_size?: number | null;
+  building_size?: number | null;
+  bedrooms?: number | null;
+  master_bedrooms?: number | null;
+  is_townhouse?: number;
+  has_pool?: number;
+  has_jacuzzi?: number;
+  has_roof_garden?: number;
+  has_parking?: number;
+  has_storage?: number;
+  document_type?: string | null;
+  description?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  photos?: string | null;
+  video?: string | null;
+  status?: VillaStatus;
+}
 
-
-export const UpdateVillaStatusRequestStatus = {
-  active: 'active',
-  inactive: 'inactive',
-} as const;
+export interface UpdateVillaRequest {
+  city?: string | null;
+  area_type?: string | null;
+  price?: number | null;
+  land_size?: number | null;
+  building_size?: number | null;
+  bedrooms?: number | null;
+  master_bedrooms?: number | null;
+  is_townhouse?: number | null;
+  has_pool?: number | null;
+  has_jacuzzi?: number | null;
+  has_roof_garden?: number | null;
+  has_parking?: number | null;
+  has_storage?: number | null;
+  document_type?: string | null;
+  description?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  photos?: string | null;
+  video?: string | null;
+  status?: VillaStatus;
+}
 
 export interface UpdateVillaStatusRequest {
-  status: UpdateVillaStatusRequestStatus;
+  status: VillaStatus;
 }
 
 export type VillaStatsByCityItem = {
@@ -63,8 +112,10 @@ export type VillaStatsByPriceTierItem = {
 
 export interface VillaStats {
   total: number;
-  active: number;
-  inactive: number;
+  published: number;
+  draft: number;
+  sold: number;
+  archived: number;
   by_city: VillaStatsByCityItem[];
   by_price_tier: VillaStatsByPriceTierItem[];
 }
@@ -99,18 +150,10 @@ export interface RequestStats {
 }
 
 export type ListVillasParams = {
-status?: ListVillasStatus;
+status?: VillaStatus;
 city?: string;
 area_type?: string;
 };
-
-export type ListVillasStatus = typeof ListVillasStatus[keyof typeof ListVillasStatus];
-
-
-export const ListVillasStatus = {
-  active: 'active',
-  inactive: 'inactive',
-} as const;
 
 export type ListRequestsParams = {
 status?: ListRequestsStatus;

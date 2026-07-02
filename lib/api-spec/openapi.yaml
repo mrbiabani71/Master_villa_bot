@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
+  version: 0.2.0
   description: API specification
 servers:
   - url: /api
@@ -38,8 +38,7 @@ paths:
         - name: status
           in: query
           schema:
-            type: string
-            enum: [active, inactive]
+            $ref: "#/components/schemas/VillaStatus"
         - name: city
           in: query
           schema:
@@ -57,6 +56,42 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Villa"
+    post:
+      operationId: createVilla
+      tags: [villas]
+      summary: Create a new villa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVillaRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Villa"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /villas/stats:
+    get:
+      operationId: getVillaStats
+      tags: [villas]
+      summary: Get villa statistics summary
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VillaStats"
 
   /villas/{id}:
     get:
@@ -82,10 +117,45 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateVilla
+      tags: [villas]
+      summary: Update all villa fields
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVillaRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Villa"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     patch:
       operationId: updateVillaStatus
       tags: [villas]
-      summary: Update villa status
+      summary: Update villa status only
       parameters:
         - name: id
           in: path
@@ -111,19 +181,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-
-  /villas/stats:
-    get:
-      operationId: getVillaStats
+    delete:
+      operationId: archiveVilla
       tags: [villas]
-      summary: Get villa statistics summary
+      summary: Archive a villa — sets status to archived, never permanently deletes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
       responses:
         "200":
-          description: Stats
+          description: Archived
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/VillaStats"
+                $ref: "#/components/schemas/Villa"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /requests:
     get:
@@ -230,6 +310,10 @@ components:
       required:
         - error
 
+    VillaStatus:
+      type: string
+      enum: [draft, published, sold, archived]
+
     Villa:
       type: object
       properties:
@@ -253,6 +337,9 @@ components:
           type: number
           nullable: true
         bedrooms:
+          type: integer
+          nullable: true
+        master_bedrooms:
           type: integer
           nullable: true
         is_townhouse:
@@ -286,7 +373,7 @@ components:
           type: string
           nullable: true
         status:
-          type: string
+          $ref: "#/components/schemas/VillaStatus"
         created_at:
           type: string
         updated_at:
@@ -304,12 +391,137 @@ components:
         - created_at
         - updated_at
 
+    CreateVillaRequest:
+      type: object
+      properties:
+        city:
+          type: string
+          nullable: true
+        area_type:
+          type: string
+          nullable: true
+        price:
+          type: number
+          nullable: true
+        land_size:
+          type: number
+          nullable: true
+        building_size:
+          type: number
+          nullable: true
+        bedrooms:
+          type: integer
+          nullable: true
+        master_bedrooms:
+          type: integer
+          nullable: true
+        is_townhouse:
+          type: integer
+          default: 0
+        has_pool:
+          type: integer
+          default: 0
+        has_jacuzzi:
+          type: integer
+          default: 0
+        has_roof_garden:
+          type: integer
+          default: 0
+        has_parking:
+          type: integer
+          default: 0
+        has_storage:
+          type: integer
+          default: 0
+        document_type:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        photos:
+          type: string
+          nullable: true
+        video:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/VillaStatus"
+
+    UpdateVillaRequest:
+      type: object
+      properties:
+        city:
+          type: string
+          nullable: true
+        area_type:
+          type: string
+          nullable: true
+        price:
+          type: number
+          nullable: true
+        land_size:
+          type: number
+          nullable: true
+        building_size:
+          type: number
+          nullable: true
+        bedrooms:
+          type: integer
+          nullable: true
+        master_bedrooms:
+          type: integer
+          nullable: true
+        is_townhouse:
+          type: integer
+          nullable: true
+        has_pool:
+          type: integer
+          nullable: true
+        has_jacuzzi:
+          type: integer
+          nullable: true
+        has_roof_garden:
+          type: integer
+          nullable: true
+        has_parking:
+          type: integer
+          nullable: true
+        has_storage:
+          type: integer
+          nullable: true
+        document_type:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        photos:
+          type: string
+          nullable: true
+        video:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/VillaStatus"
+
     UpdateVillaStatusRequest:
       type: object
       properties:
         status:
-          type: string
-          enum: [active, inactive]
+          $ref: "#/components/schemas/VillaStatus"
       required:
         - status
 
@@ -318,9 +530,13 @@ components:
       properties:
         total:
           type: integer
-        active:
+        published:
           type: integer
-        inactive:
+        draft:
+          type: integer
+        sold:
+          type: integer
+        archived:
           type: integer
         by_city:
           type: array
@@ -348,8 +564,10 @@ components:
               - count
       required:
         - total
-        - active
-        - inactive
+        - published
+        - draft
+        - sold
+        - archived
         - by_city
         - by_price_tier
 

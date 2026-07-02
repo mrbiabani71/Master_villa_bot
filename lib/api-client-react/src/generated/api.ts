@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * API specification
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import {
   useMutation,
@@ -20,12 +20,14 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  CreateVillaRequest,
   ErrorResponse,
   HealthStatus,
   ListRequestsParams,
   ListVillasParams,
   RequestStats,
   RequestsPage,
+  UpdateVillaRequest,
   UpdateVillaStatusRequest,
   Villa,
   VillaStats,
@@ -221,114 +223,36 @@ export function useListVillas<TData = Awaited<ReturnType<typeof listVillas>>, TE
 
 
 
-export const getGetVillaUrl = (id: number,) => {
+export const getCreateVillaUrl = () => {
 
 
 
 
-  return `/api/villas/${id}`
+  return `/api/villas`
 }
 
 /**
- * @summary Get villa by ID
+ * @summary Create a new villa
  */
-export const getVilla = async (id: number, options?: RequestInit): Promise<Villa> => {
+export const createVilla = async (createVillaRequest: CreateVillaRequest, options?: RequestInit): Promise<Villa> => {
 
-  return customFetch<Villa>(getGetVillaUrl(id),
+  return customFetch<Villa>(getCreateVillaUrl(),
   {
     ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getGetVillaQueryKey = (id: number,) => {
-    return [
-    `/api/villas/${id}`
-    ] as const;
-    }
-
-
-export const getGetVillaQueryOptions = <TData = Awaited<ReturnType<typeof getVilla>>, TError = ErrorType<ErrorResponse>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVilla>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetVillaQueryKey(id);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVilla>>> = ({ signal }) => getVilla(id, { signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVilla>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetVillaQueryResult = NonNullable<Awaited<ReturnType<typeof getVilla>>>
-export type GetVillaQueryError = ErrorType<ErrorResponse>
-
-
-/**
- * @summary Get villa by ID
- */
-
-export function useGetVilla<TData = Awaited<ReturnType<typeof getVilla>>, TError = ErrorType<ErrorResponse>>(
- id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVilla>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetVillaQueryOptions(id,options)
-
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
-export const getUpdateVillaStatusUrl = (id: number,) => {
-
-
-
-
-  return `/api/villas/${id}`
-}
-
-/**
- * @summary Update villa status
- */
-export const updateVillaStatus = async (id: number,
-    updateVillaStatusRequest: UpdateVillaStatusRequest, options?: RequestInit): Promise<Villa> => {
-
-  return customFetch<Villa>(getUpdateVillaStatusUrl(id),
-  {
-    ...options,
-    method: 'PATCH',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(updateVillaStatusRequest)
+    body: JSON.stringify(createVillaRequest)
   }
 );}
 
 
 
 
-export const getUpdateVillaStatusMutationOptions = <TError = ErrorType<ErrorResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVillaStatus>>, TError,{id: number;data: BodyType<UpdateVillaStatusRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateVillaStatus>>, TError,{id: number;data: BodyType<UpdateVillaStatusRequest>}, TContext> => {
+export const getCreateVillaMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVilla>>, TError,{data: BodyType<CreateVillaRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVilla>>, TError,{data: BodyType<CreateVillaRequest>}, TContext> => {
 
-const mutationKey = ['updateVillaStatus'];
+const mutationKey = ['createVilla'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -338,10 +262,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateVillaStatus>>, {id: number;data: BodyType<UpdateVillaStatusRequest>}> = (props) => {
-          const {id,data} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVilla>>, {data: BodyType<CreateVillaRequest>}> = (props) => {
+          const {data} = props ?? {};
 
-          return  updateVillaStatus(id,data,requestOptions)
+          return  createVilla(data,requestOptions)
         }
 
 
@@ -351,22 +275,22 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type UpdateVillaStatusMutationResult = NonNullable<Awaited<ReturnType<typeof updateVillaStatus>>>
-    export type UpdateVillaStatusMutationBody = BodyType<UpdateVillaStatusRequest>
-    export type UpdateVillaStatusMutationError = ErrorType<ErrorResponse>
+    export type CreateVillaMutationResult = NonNullable<Awaited<ReturnType<typeof createVilla>>>
+    export type CreateVillaMutationBody = BodyType<CreateVillaRequest>
+    export type CreateVillaMutationError = ErrorType<ErrorResponse>
 
     /**
- * @summary Update villa status
+ * @summary Create a new villa
  */
-export const useUpdateVillaStatus = <TError = ErrorType<ErrorResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVillaStatus>>, TError,{id: number;data: BodyType<UpdateVillaStatusRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useCreateVilla = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVilla>>, TError,{data: BodyType<CreateVillaRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof updateVillaStatus>>,
+        Awaited<ReturnType<typeof createVilla>>,
         TError,
-        {id: number;data: BodyType<UpdateVillaStatusRequest>},
+        {data: BodyType<CreateVillaRequest>},
         TContext
       > => {
-      return useMutation(getUpdateVillaStatusMutationOptions(options));
+      return useMutation(getCreateVillaMutationOptions(options));
     }
 
 export const getGetVillaStatsUrl = () => {
@@ -445,6 +369,295 @@ export function useGetVillaStats<TData = Awaited<ReturnType<typeof getVillaStats
 
 
 
+
+export const getGetVillaUrl = (id: number,) => {
+
+
+
+
+  return `/api/villas/${id}`
+}
+
+/**
+ * @summary Get villa by ID
+ */
+export const getVilla = async (id: number, options?: RequestInit): Promise<Villa> => {
+
+  return customFetch<Villa>(getGetVillaUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVillaQueryKey = (id: number,) => {
+    return [
+    `/api/villas/${id}`
+    ] as const;
+    }
+
+
+export const getGetVillaQueryOptions = <TData = Awaited<ReturnType<typeof getVilla>>, TError = ErrorType<ErrorResponse>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVilla>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVillaQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVilla>>> = ({ signal }) => getVilla(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVilla>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVillaQueryResult = NonNullable<Awaited<ReturnType<typeof getVilla>>>
+export type GetVillaQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get villa by ID
+ */
+
+export function useGetVilla<TData = Awaited<ReturnType<typeof getVilla>>, TError = ErrorType<ErrorResponse>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVilla>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVillaQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateVillaUrl = (id: number,) => {
+
+
+
+
+  return `/api/villas/${id}`
+}
+
+/**
+ * @summary Update all villa fields
+ */
+export const updateVilla = async (id: number,
+    updateVillaRequest: UpdateVillaRequest, options?: RequestInit): Promise<Villa> => {
+
+  return customFetch<Villa>(getUpdateVillaUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateVillaRequest)
+  }
+);}
+
+
+
+
+export const getUpdateVillaMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVilla>>, TError,{id: number;data: BodyType<UpdateVillaRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateVilla>>, TError,{id: number;data: BodyType<UpdateVillaRequest>}, TContext> => {
+
+const mutationKey = ['updateVilla'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateVilla>>, {id: number;data: BodyType<UpdateVillaRequest>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateVilla(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateVillaMutationResult = NonNullable<Awaited<ReturnType<typeof updateVilla>>>
+    export type UpdateVillaMutationBody = BodyType<UpdateVillaRequest>
+    export type UpdateVillaMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update all villa fields
+ */
+export const useUpdateVilla = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVilla>>, TError,{id: number;data: BodyType<UpdateVillaRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateVilla>>,
+        TError,
+        {id: number;data: BodyType<UpdateVillaRequest>},
+        TContext
+      > => {
+      return useMutation(getUpdateVillaMutationOptions(options));
+    }
+
+export const getUpdateVillaStatusUrl = (id: number,) => {
+
+
+
+
+  return `/api/villas/${id}`
+}
+
+/**
+ * @summary Update villa status only
+ */
+export const updateVillaStatus = async (id: number,
+    updateVillaStatusRequest: UpdateVillaStatusRequest, options?: RequestInit): Promise<Villa> => {
+
+  return customFetch<Villa>(getUpdateVillaStatusUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateVillaStatusRequest)
+  }
+);}
+
+
+
+
+export const getUpdateVillaStatusMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVillaStatus>>, TError,{id: number;data: BodyType<UpdateVillaStatusRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateVillaStatus>>, TError,{id: number;data: BodyType<UpdateVillaStatusRequest>}, TContext> => {
+
+const mutationKey = ['updateVillaStatus'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateVillaStatus>>, {id: number;data: BodyType<UpdateVillaStatusRequest>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateVillaStatus(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateVillaStatusMutationResult = NonNullable<Awaited<ReturnType<typeof updateVillaStatus>>>
+    export type UpdateVillaStatusMutationBody = BodyType<UpdateVillaStatusRequest>
+    export type UpdateVillaStatusMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update villa status only
+ */
+export const useUpdateVillaStatus = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVillaStatus>>, TError,{id: number;data: BodyType<UpdateVillaStatusRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateVillaStatus>>,
+        TError,
+        {id: number;data: BodyType<UpdateVillaStatusRequest>},
+        TContext
+      > => {
+      return useMutation(getUpdateVillaStatusMutationOptions(options));
+    }
+
+export const getArchiveVillaUrl = (id: number,) => {
+
+
+
+
+  return `/api/villas/${id}`
+}
+
+/**
+ * @summary Archive a villa — sets status to archived, never permanently deletes
+ */
+export const archiveVilla = async (id: number, options?: RequestInit): Promise<Villa> => {
+
+  return customFetch<Villa>(getArchiveVillaUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getArchiveVillaMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveVilla>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof archiveVilla>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['archiveVilla'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archiveVilla>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  archiveVilla(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ArchiveVillaMutationResult = NonNullable<Awaited<ReturnType<typeof archiveVilla>>>
+
+    export type ArchiveVillaMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Archive a villa — sets status to archived, never permanently deletes
+ */
+export const useArchiveVilla = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveVilla>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof archiveVilla>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getArchiveVillaMutationOptions(options));
+    }
 
 export const getListRequestsUrl = (params?: ListRequestsParams,) => {
   const normalizedParams = new URLSearchParams();

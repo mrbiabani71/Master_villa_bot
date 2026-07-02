@@ -70,7 +70,7 @@ export default function Dashboard() {
           <CardContent>
             <div className="text-3xl font-bold">{villaStats?.total || 0}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              <span className="text-emerald-600 font-medium">{villaStats?.active || 0}</span> active listings
+              <span className="text-emerald-600 font-medium">{villaStats?.published || 0}</span> published listings
             </p>
           </CardContent>
         </Card>

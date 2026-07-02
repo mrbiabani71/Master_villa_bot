@@ -3,12 +3,12 @@
  * Do not edit manually.
  * Api
  * API specification
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
-import type { ListVillasStatus } from './listVillasStatus';
+import type { VillaStatus } from './villaStatus';
 
 export type ListVillasParams = {
-status?: ListVillasStatus;
+status?: VillaStatus;
 city?: string;
 area_type?: string;
 };

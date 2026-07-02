@@ -9,6 +9,8 @@ import { Layout } from "@/components/layout";
 import Dashboard from "@/pages/dashboard";
 import VillasPage from "@/pages/villas/index";
 import VillaDetail from "@/pages/villas/[id]";
+import VillaNew from "@/pages/villas/new";
+import VillaEdit from "@/pages/villas/edit";
 import RequestsPage from "@/pages/requests/index";
 
 const queryClient = new QueryClient();
@@ -18,8 +20,10 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={Dashboard} />
-        <Route path="/villas" component={VillasPage} />
+        <Route path="/villas/new" component={VillaNew} />
+        <Route path="/villas/:id/edit" component={VillaEdit} />
         <Route path="/villas/:id" component={VillaDetail} />
+        <Route path="/villas" component={VillasPage} />
         <Route path="/requests" component={RequestsPage} />
         <Route component={NotFound} />
       </Switch>

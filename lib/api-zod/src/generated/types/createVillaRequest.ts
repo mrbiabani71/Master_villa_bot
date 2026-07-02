@@ -7,9 +7,7 @@
  */
 import type { VillaStatus } from './villaStatus';
 
-export interface Villa {
-  id: number;
-  villa_code: string;
+export interface CreateVillaRequest {
   city?: string | null;
   area_type?: string | null;
   price?: number | null;
@@ -17,19 +15,17 @@ export interface Villa {
   building_size?: number | null;
   bedrooms?: number | null;
   master_bedrooms?: number | null;
-  is_townhouse: number;
-  has_pool: number;
-  has_jacuzzi: number;
-  has_roof_garden: number;
-  has_parking: number;
-  has_storage: number;
+  is_townhouse?: number;
+  has_pool?: number;
+  has_jacuzzi?: number;
+  has_roof_garden?: number;
+  has_parking?: number;
+  has_storage?: number;
   document_type?: string | null;
   description?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   photos?: string | null;
   video?: string | null;
-  status: VillaStatus;
-  created_at: string;
-  updated_at: string;
+  status?: VillaStatus;
 }
