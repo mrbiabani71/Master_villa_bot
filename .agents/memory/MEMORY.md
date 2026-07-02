@@ -1,0 +1,2 @@
+- [better-sqlite3 Node version](better-sqlite3-node-version.md) — pre-built binary targets Node 24; must run Node 24 or rebuild on version mismatch.
+- [Admin panel API proxy](admin-panel-api-proxy.md) — Vite dev server needs a proxy for /api → localhost:3000 or the dashboard shows all zeros.
