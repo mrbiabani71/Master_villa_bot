@@ -20,13 +20,19 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary List all villas
  */
+export const listVillasQueryPageDefault = 0;
+export const listVillasQueryPageSizeDefault = 20;
+
 export const ListVillasQueryParams = zod.object({
   "status": zod.enum(['draft', 'published', 'sold', 'archived']).optional(),
   "city": zod.coerce.string().optional(),
-  "area_type": zod.coerce.string().optional()
+  "area_type": zod.coerce.string().optional(),
+  "page": zod.coerce.number().default(listVillasQueryPageDefault),
+  "page_size": zod.coerce.number().default(listVillasQueryPageSizeDefault)
 })
 
-export const ListVillasResponseItem = zod.object({
+export const ListVillasResponse = zod.object({
+  "data": zod.array(zod.object({
   "id": zod.number(),
   "villa_code": zod.string(),
   "city": zod.string().nullish(),
@@ -51,8 +57,11 @@ export const ListVillasResponseItem = zod.object({
   "status": zod.enum(['draft', 'published', 'sold', 'archived']),
   "created_at": zod.string(),
   "updated_at": zod.string()
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "page_size": zod.number()
 })
-export const ListVillasResponse = zod.array(ListVillasResponseItem)
 
 
 /**

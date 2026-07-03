@@ -18,6 +18,7 @@ export * from './requestStats';
 export * from './updateVillaRequest';
 export * from './updateVillaStatusRequest';
 export * from './villa';
+export * from './villasPage';
 export * from './villaStats';
 export * from './villaStatsByCityItem';
 export * from './villaStatsByPriceTierItem';

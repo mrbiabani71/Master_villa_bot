@@ -96,36 +96,59 @@ router.get("/villas/stats", (req, res) => {
 });
 
 // GET /villas
+const MAX_PAGE_SIZE = 100;
+const DEFAULT_PAGE_SIZE = 20;
+
 router.get("/villas", (req, res) => {
-  const parsed = ListVillasQueryParams.safeParse(req.query);
+  const parsed = ListVillasQueryParams.safeParse({
+    ...req.query,
+    page: req.query.page !== undefined ? Number(req.query.page) : 0,
+    page_size:
+      req.query.page_size !== undefined ? Number(req.query.page_size) : DEFAULT_PAGE_SIZE,
+  });
+
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid query params" });
     return;
   }
-  const { status, city, area_type } = parsed.data;
+  const { status, city, area_type, page, page_size } = parsed.data;
+
+  const safePage = Math.max(0, page ?? 0);
+  const safePageSize = Math.min(Math.max(1, page_size ?? DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
 
   const db = getDb();
   try {
-    let query = "SELECT * FROM villas WHERE 1=1";
+    let countQuery = "SELECT COUNT(*) as cnt FROM villas WHERE 1=1";
+    let dataQuery = "SELECT * FROM villas WHERE 1=1";
     const params: unknown[] = [];
+    const countParams: unknown[] = [];
 
     if (status) {
-      query += " AND status = ?";
+      dataQuery += " AND status = ?";
+      countQuery += " AND status = ?";
       params.push(status);
+      countParams.push(status);
     }
     if (city) {
-      query += " AND city = ?";
+      dataQuery += " AND city = ?";
+      countQuery += " AND city = ?";
       params.push(city);
+      countParams.push(city);
     }
     if (area_type) {
-      query += " AND area_type = ?";
+      dataQuery += " AND area_type = ?";
+      countQuery += " AND area_type = ?";
       params.push(area_type);
+      countParams.push(area_type);
     }
 
-    query += " ORDER BY created_at DESC";
+    dataQuery += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+    params.push(safePageSize, safePage * safePageSize);
 
-    const rows = db.prepare(query).all(...params);
-    res.json(rows);
+    const total = (db.prepare(countQuery).get(...countParams) as { cnt: number }).cnt;
+    const rows = db.prepare(dataQuery).all(...params);
+
+    res.json({ data: rows, total, page: safePage, page_size: safePageSize });
   } finally {
     db.close();
   }

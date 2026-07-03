@@ -11,4 +11,6 @@ export type ListVillasParams = {
 status?: VillaStatus;
 city?: string;
 area_type?: string;
+page?: number;
+page_size?: number;
 };

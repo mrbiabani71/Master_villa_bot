@@ -53,10 +53,13 @@ export default function VillasPage() {
 
   const queryClient = useQueryClient();
 
-  const { data: villas, isLoading } = useListVillas({
+  const { data: villasPage, isLoading } = useListVillas({
     ...(statusFilter !== "all" && { status: statusFilter }),
     ...(typeFilter !== "all" && { area_type: typeFilter }),
+    page: 0,
+    page_size: 100,
   });
+  const villas = villasPage?.data;
 
   const updateStatus = useUpdateVillaStatus();
 

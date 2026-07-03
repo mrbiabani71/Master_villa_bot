@@ -31,6 +31,7 @@ import type {
   UpdateVillaStatusRequest,
   Villa,
   VillaStats,
+  VillasPage,
   VisitRequest
 } from './api.schemas';
 
@@ -157,9 +158,9 @@ export const getListVillasUrl = (params?: ListVillasParams,) => {
 /**
  * @summary List all villas
  */
-export const listVillas = async (params?: ListVillasParams, options?: RequestInit): Promise<Villa[]> => {
+export const listVillas = async (params?: ListVillasParams, options?: RequestInit): Promise<VillasPage> => {
 
-  return customFetch<Villa[]>(getListVillasUrl(params),
+  return customFetch<VillasPage>(getListVillasUrl(params),
   {
     ...options,
     method: 'GET'

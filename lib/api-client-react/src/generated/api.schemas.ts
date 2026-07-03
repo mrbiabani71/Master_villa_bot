@@ -120,6 +120,13 @@ export interface VillaStats {
   by_price_tier: VillaStatsByPriceTierItem[];
 }
 
+export interface VillasPage {
+  data: Villa[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export interface VisitRequest {
   id: number;
   villa_code: string;
@@ -153,6 +160,8 @@ export type ListVillasParams = {
 status?: VillaStatus;
 city?: string;
 area_type?: string;
+page?: number;
+page_size?: number;
 };
 
 export type ListRequestsParams = {
