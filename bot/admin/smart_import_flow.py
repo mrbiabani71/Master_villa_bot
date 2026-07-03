@@ -22,12 +22,16 @@ from telegram.ext import (
     filters,
 )
 
+import logging
+
 from config import ADMIN_ID
 from keyboards import get_main_keyboard
 from smart_import.parser import parse_villa_text
 from smart_import.importer import import_villa
 from smart_import.models import VillaData
 from states import SI_WAITING_TEXT, SI_PREVIEW, SI_EDIT_FIELD, SI_EDIT_VALUE
+
+logger = logging.getLogger(__name__)
 
 
 # ── Persian digit normalisation (for user-supplied values) ────────────────────
@@ -156,8 +160,50 @@ async def start_smart_import(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def handle_import_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = update.message.text.strip()
+
+    logger.debug(
+        "SMART_IMPORT | raw text (%d chars, %d lines):\n%s",
+        len(text), len(text.splitlines()), text,
+    )
+
     data = parse_villa_text(text)
     context.user_data["si_data"] = data
+
+    logger.debug(
+        "SMART_IMPORT | extracted fields:\n"
+        "  villa_code     = %s\n"
+        "  city           = %s\n"
+        "  area_type      = %s\n"
+        "  price          = %s\n"
+        "  land_size      = %s\n"
+        "  building_size  = %s\n"
+        "  bedrooms       = %s\n"
+        "  master_bedrooms= %s\n"
+        "  has_pool       = %s\n"
+        "  has_jacuzzi    = %s\n"
+        "  has_roof_garden= %s\n"
+        "  has_parking    = %s\n"
+        "  has_storage    = %s\n"
+        "  documents      = %s\n"
+        "  description    = %r",
+        data.villa_code, data.city, data.area_type, data.price,
+        data.land_size, data.building_size, data.bedrooms, data.master_bedrooms,
+        data.has_pool, data.has_jacuzzi, data.has_roof_garden,
+        data.has_parking, data.has_storage,
+        data.documents, data.description,
+    )
+
+    missing = []
+    if data.city is None:
+        missing.append("city (no known city name found in text)")
+    if data.price is None:
+        missing.append("price (no میلیارد/میلیون/قیمت line found)")
+    if missing:
+        logger.warning(
+            "SMART_IMPORT | missing fields — %s", " | ".join(missing)
+        )
+    else:
+        logger.debug("SMART_IMPORT | all required fields present")
 
     preview = _build_preview(data)
     await update.message.reply_text(

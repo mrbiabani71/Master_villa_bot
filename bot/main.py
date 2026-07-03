@@ -1,7 +1,17 @@
 import sys
 import os
+import logging
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+logging.basicConfig(
+    level=logging.WARNING,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+    stream=sys.stdout,
+)
+for _name in ("admin.smart_import_flow", "channel_importer", "smart_import.importer"):
+    logging.getLogger(_name).setLevel(logging.DEBUG)
 
 token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 if not token:

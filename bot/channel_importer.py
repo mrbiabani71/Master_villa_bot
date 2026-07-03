@@ -115,22 +115,52 @@ def parse_villa_post(text: str) -> dict | None:
     """
     lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
 
+    logger.debug(
+        "CHANNEL_IMPORT | raw post (%d chars, %d lines):\n%s",
+        len(text), len(lines), text,
+    )
+
     raw: dict[str, str] = {}
     for line in lines:
         for emoji, key in FIELD_PREFIXES:
             if line.startswith(emoji):
                 raw[key] = line[len(emoji):].strip()
+                logger.debug("CHANNEL_IMPORT | matched field %r = %r", key, raw[key])
                 break
+        else:
+            logger.debug("CHANNEL_IMPORT | unmatched line: %r", line)
 
-    if "city" not in raw or "price" not in raw:
+    logger.debug("CHANNEL_IMPORT | detected emoji fields: %s", list(raw.keys()))
+
+    if "city" not in raw:
+        logger.warning(
+            "CHANNEL_IMPORT | REJECTED — missing city (📍 prefix not found). "
+            "Detected fields: %s",
+            list(raw.keys()),
+        )
+        return None
+    if "price" not in raw:
+        logger.warning(
+            "CHANNEL_IMPORT | REJECTED — missing price (💰 prefix not found). "
+            "Detected fields: %s",
+            list(raw.keys()),
+        )
         return None
 
     city = raw["city"].strip()
     area_type = CITY_AREA_MAP.get(city, "")
+    logger.debug("CHANNEL_IMPORT | city=%r  area_type=%r", city, area_type)
 
     price = _parse_price(raw["price"])
     if price is None:
+        logger.warning(
+            "CHANNEL_IMPORT | REJECTED — price field present (%r) but failed to parse "
+            "(expected format: '۲.۵ میلیارد' / '800 میلیون' / raw number)",
+            raw["price"],
+        )
         return None
+
+    logger.debug("CHANNEL_IMPORT | price parsed OK: %s toman", price)
 
     # Villa code
     code_raw = raw.get("code", "AUTO").strip()
