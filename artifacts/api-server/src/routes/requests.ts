@@ -30,11 +30,15 @@ router.get("/requests/stats", (_req, res) => {
   }
 });
 
+const MAX_PAGE_SIZE = 100;
+const DEFAULT_PAGE_SIZE = 20;
+
 router.get("/requests", (req, res) => {
   const parsed = ListRequestsQueryParams.safeParse({
     ...req.query,
     page: req.query.page !== undefined ? Number(req.query.page) : 0,
-    page_size: req.query.page_size !== undefined ? Number(req.query.page_size) : 20,
+    page_size:
+      req.query.page_size !== undefined ? Number(req.query.page_size) : DEFAULT_PAGE_SIZE,
   });
 
   if (!parsed.success) {
@@ -42,7 +46,12 @@ router.get("/requests", (req, res) => {
     return;
   }
 
-  const { status, request_type, page, page_size } = parsed.data;
+  const { status, request_type } = parsed.data;
+  const page = Math.max(0, parsed.data.page ?? 0);
+  const page_size = Math.min(
+    Math.max(1, parsed.data.page_size ?? DEFAULT_PAGE_SIZE),
+    MAX_PAGE_SIZE
+  );
 
   const db = getDb();
   try {
@@ -74,12 +83,12 @@ router.get("/requests", (req, res) => {
     }
 
     dataQuery += " ORDER BY r.created_at DESC, r.id DESC LIMIT ? OFFSET ?";
-    params.push(page_size ?? 20, (page ?? 0) * (page_size ?? 20));
+    params.push(page_size, page * page_size);
 
     const total = (db.prepare(countQuery).get(...countParams) as { cnt: number }).cnt;
     const data = db.prepare(dataQuery).all(...params);
 
-    res.json({ data, total, page: page ?? 0, page_size: page_size ?? 20 });
+    res.json({ data, total, page, page_size });
   } finally {
     db.close();
   }
