@@ -3,8 +3,7 @@ from telegram.ext import ContextTypes, CallbackQueryHandler
 
 # ── FAQ content ────────────────────────────────────────────────────────────────
 
-# TODO: replace with the real t.me link to the educational post about "سند شورایی"
-SHOURAEI_POST_LINK = "https://t.me/master_villa_channel"
+SHOURAEI_POST_LINK = "https://t.me/villakadehinfo/27"
 
 FAQ_ITEMS = [
     ("📄 سند ویلا",           "faq_deed"),
