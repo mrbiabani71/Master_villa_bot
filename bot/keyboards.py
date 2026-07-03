@@ -17,6 +17,16 @@ admin_panel_keyboard = ReplyKeyboardMarkup(
     [
         ["➕ ثبت ویلا", "📋 درخواست‌ها"],
         ["📊 آمار", "⚙️ تنظیمات"],
+        ["⬅️ بازگشت"],
+    ],
+    resize_keyboard=True,
+)
+
+settings_keyboard = ReplyKeyboardMarkup(
+    [
+        ["🏙 مدیریت شهرها"],
+        ["📍 مدیریت مناطق"],
+        ["⬅️ بازگشت"],
     ],
     resize_keyboard=True,
 )

@@ -14,7 +14,7 @@ from telegram.ext import (
 from config import TELEGRAM_BOT_TOKEN
 from keyboards import get_main_keyboard
 from database import init_db
-from admin.panel import ADMIN_PANEL_BUTTONS, handle_admin_panel, handle_admin_buttons
+from admin.panel import ADMIN_PANEL_BUTTONS, SETTINGS_BUTTONS, handle_admin_panel, handle_admin_buttons
 from admin.add_villa import build_add_villa_conv
 from admin.requests import cb_req_page, cb_req_contact, cb_req_delete
 from user.browse import build_browse_conv, browse_callback_handlers
@@ -48,11 +48,11 @@ FAQ_TEXT = (
 )
 
 ABOUT_TEXT = (
-    "ℹ️ *درباره ماستر ویلا*\n\n"
-    "ماستر ویلا یک مجموعه تخصصی در حوزه خرید و فروش ویلاهای شمال ایران است.\n\n"
+    "ℹ️ *درباره مستر ویلا*\n\n"
+    "مستر ویلا یک مجموعه تخصصی در حوزه خرید و فروش ویلاهای شمال ایران است.\n\n"
     "🎯 *تخصص ما:*\n"
     "ویلاهای ساحلی و جنگلی در بهترین مناطق استان مازندران\n\n"
-    "✅ *چرا ماستر ویلا؟*\n"
+    "✅ *چرا مستر ویلا؟*\n"
     "• بیش از ۱۰ سال سابقه در بازار مسکن شمال\n"
     "• ویلاهای تأییدشده با اسناد معتبر\n"
     "• مشاوره رایگان و بازدید بدون هزینه\n"
@@ -85,7 +85,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "👑 پنل مدیریت":
         await handle_admin_panel(update, context)
 
-    elif text in ADMIN_PANEL_BUTTONS:
+    elif text in ADMIN_PANEL_BUTTONS or text in SETTINGS_BUTTONS:
         await handle_admin_buttons(update, context)
 
     else:
