@@ -1,2 +1,2 @@
-- [better-sqlite3 Node version](better-sqlite3-node-version.md) — pre-built binary targets Node 24; must run Node 24 or rebuild on version mismatch.
+- [better-sqlite3 migration](better-sqlite3-migration.md) — API server migrated from SQLite (better-sqlite3) to Replit PostgreSQL; routes use drizzle-orm + pg via @workspace/db. Schema in lib/db/src/schema/index.ts.
 - [Admin panel API proxy](admin-panel-api-proxy.md) — Vite dev server needs a proxy for /api → localhost:3000 or the dashboard shows all zeros.

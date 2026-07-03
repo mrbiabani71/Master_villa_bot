@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import Database from "better-sqlite3";
-import path from "path";
+import { db, villasTable } from "@workspace/db";
+import { eq, sql, ne } from "drizzle-orm";
 import {
   ListVillasQueryParams,
   CreateVillaBody,
@@ -14,69 +14,32 @@ import {
 
 const router: IRouter = Router();
 
-const DB_PATH = path.resolve(process.cwd(), "../../bot/bot.db");
+const MAX_PAGE_SIZE = 100;
+const DEFAULT_PAGE_SIZE = 20;
 
-function getDb() {
-  return new Database(DB_PATH, { readonly: false });
-}
-
-function getNextVillaCode(db: ReturnType<typeof getDb>): string {
-  const row = db
-    .prepare(
-      "SELECT MAX(CAST(SUBSTR(villa_code, 4) AS INTEGER)) AS max_num FROM villas"
-    )
-    .get() as { max_num: number | null };
-  const next = (row.max_num ?? 1000) + 1;
+async function getNextVillaCode(): Promise<string> {
+  const result = await db.execute(
+    sql`SELECT MAX(CAST(SUBSTRING(villa_code, 4) AS INTEGER)) AS max_num FROM villas`
+  );
+  const maxNum = (result.rows[0] as { max_num: number | null }).max_num;
+  const next = (maxNum ?? 1000) + 1;
   return `MV-${next}`;
 }
 
-// GET /villas/stats  — must be registered before /villas/:id
-router.get("/villas/stats", (req, res) => {
-  const db = getDb();
+router.get("/villas/stats", async (_req, res) => {
   try {
-    const total = (
-      db.prepare("SELECT COUNT(*) as cnt FROM villas").get() as { cnt: number }
-    ).cnt;
-    const published = (
-      db
-        .prepare("SELECT COUNT(*) as cnt FROM villas WHERE status = 'published'")
-        .get() as { cnt: number }
-    ).cnt;
-    const draft = (
-      db
-        .prepare("SELECT COUNT(*) as cnt FROM villas WHERE status = 'draft'")
-        .get() as { cnt: number }
-    ).cnt;
-    const sold = (
-      db
-        .prepare("SELECT COUNT(*) as cnt FROM villas WHERE status = 'sold'")
-        .get() as { cnt: number }
-    ).cnt;
-    const archived = (
-      db
-        .prepare("SELECT COUNT(*) as cnt FROM villas WHERE status = 'archived'")
-        .get() as { cnt: number }
-    ).cnt;
+    const [total, published, draft, sold, archived, byCity, priceRows] = await Promise.all([
+      db.execute(sql`SELECT COUNT(*) as cnt FROM villas`),
+      db.execute(sql`SELECT COUNT(*) as cnt FROM villas WHERE status = 'published'`),
+      db.execute(sql`SELECT COUNT(*) as cnt FROM villas WHERE status = 'draft'`),
+      db.execute(sql`SELECT COUNT(*) as cnt FROM villas WHERE status = 'sold'`),
+      db.execute(sql`SELECT COUNT(*) as cnt FROM villas WHERE status = 'archived'`),
+      db.execute(sql`SELECT city, COUNT(*) as count FROM villas WHERE city IS NOT NULL AND status != 'archived' GROUP BY city ORDER BY count DESC`),
+      db.execute(sql`SELECT price FROM villas WHERE price IS NOT NULL AND status != 'archived'`),
+    ]);
 
-    const by_city = db
-      .prepare(
-        "SELECT city, COUNT(*) as count FROM villas WHERE city IS NOT NULL AND status != 'archived' GROUP BY city ORDER BY count DESC"
-      )
-      .all() as { city: string; count: number }[];
-
-    const rows = db
-      .prepare(
-        "SELECT price FROM villas WHERE price IS NOT NULL AND status != 'archived'"
-      )
-      .all() as { price: number }[];
-
-    const tiers: Record<string, number> = {
-      اقتصادی: 0,
-      متوسط: 0,
-      "نیمه لوکس": 0,
-      لوکس: 0,
-    };
-    for (const row of rows) {
+    const tiers: Record<string, number> = { اقتصادی: 0, متوسط: 0, "نیمه لوکس": 0, لوکس: 0 };
+    for (const row of priceRows.rows as { price: number }[]) {
       const p = row.price;
       if (p < 7_000_000_000) tiers["اقتصادی"]++;
       else if (p < 10_000_000_000) tiers["متوسط"]++;
@@ -84,27 +47,27 @@ router.get("/villas/stats", (req, res) => {
       else tiers["لوکس"]++;
     }
 
-    const by_price_tier = Object.entries(tiers).map(([tier, count]) => ({
-      tier,
-      count,
-    }));
+    const by_price_tier = Object.entries(tiers).map(([tier, count]) => ({ tier, count }));
 
-    res.json({ total, published, draft, sold, archived, by_city, by_price_tier });
-  } finally {
-    db.close();
+    res.json({
+      total: Number((total.rows[0] as { cnt: string }).cnt),
+      published: Number((published.rows[0] as { cnt: string }).cnt),
+      draft: Number((draft.rows[0] as { cnt: string }).cnt),
+      sold: Number((sold.rows[0] as { cnt: string }).cnt),
+      archived: Number((archived.rows[0] as { cnt: string }).cnt),
+      by_city: byCity.rows,
+      by_price_tier,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// GET /villas
-const MAX_PAGE_SIZE = 100;
-const DEFAULT_PAGE_SIZE = 20;
-
-router.get("/villas", (req, res) => {
+router.get("/villas", async (req, res) => {
   const parsed = ListVillasQueryParams.safeParse({
     ...req.query,
     page: req.query.page !== undefined ? Number(req.query.page) : 0,
-    page_size:
-      req.query.page_size !== undefined ? Number(req.query.page_size) : DEFAULT_PAGE_SIZE,
+    page_size: req.query.page_size !== undefined ? Number(req.query.page_size) : DEFAULT_PAGE_SIZE,
   });
 
   if (!parsed.success) {
@@ -112,50 +75,28 @@ router.get("/villas", (req, res) => {
     return;
   }
   const { status, city, area_type, page, page_size } = parsed.data;
-
   const safePage = Math.max(0, page ?? 0);
   const safePageSize = Math.min(Math.max(1, page_size ?? DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
 
-  const db = getDb();
   try {
-    let countQuery = "SELECT COUNT(*) as cnt FROM villas WHERE 1=1";
-    let dataQuery = "SELECT * FROM villas WHERE 1=1";
-    const params: unknown[] = [];
-    const countParams: unknown[] = [];
+    let conditions = sql`1=1`;
+    if (status) conditions = sql`${conditions} AND status = ${status}`;
+    if (city) conditions = sql`${conditions} AND city = ${city}`;
+    if (area_type) conditions = sql`${conditions} AND area_type = ${area_type}`;
 
-    if (status) {
-      dataQuery += " AND status = ?";
-      countQuery += " AND status = ?";
-      params.push(status);
-      countParams.push(status);
-    }
-    if (city) {
-      dataQuery += " AND city = ?";
-      countQuery += " AND city = ?";
-      params.push(city);
-      countParams.push(city);
-    }
-    if (area_type) {
-      dataQuery += " AND area_type = ?";
-      countQuery += " AND area_type = ?";
-      params.push(area_type);
-      countParams.push(area_type);
-    }
+    const [countResult, rows] = await Promise.all([
+      db.execute(sql`SELECT COUNT(*) as cnt FROM villas WHERE ${conditions}`),
+      db.execute(sql`SELECT * FROM villas WHERE ${conditions} ORDER BY created_at DESC LIMIT ${safePageSize} OFFSET ${safePage * safePageSize}`),
+    ]);
 
-    dataQuery += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
-    params.push(safePageSize, safePage * safePageSize);
-
-    const total = (db.prepare(countQuery).get(...countParams) as { cnt: number }).cnt;
-    const rows = db.prepare(dataQuery).all(...params);
-
-    res.json({ data: rows, total, page: safePage, page_size: safePageSize });
-  } finally {
-    db.close();
+    const total = Number((countResult.rows[0] as { cnt: string }).cnt);
+    res.json({ data: rows.rows, total, page: safePage, page_size: safePageSize });
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// POST /villas  — create
-router.post("/villas", (req, res) => {
+router.post("/villas", async (req, res) => {
   const parsed = CreateVillaBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request body", details: parsed.error.flatten() });
@@ -163,156 +104,98 @@ router.post("/villas", (req, res) => {
   }
   const data = parsed.data;
 
-  const db = getDb();
   try {
-    const villaCode = getNextVillaCode(db);
-
-    db.prepare(`
-      INSERT INTO villas (
-        villa_code, city, area_type, price,
-        land_size, building_size, bedrooms, master_bedrooms,
-        is_townhouse, has_pool, has_jacuzzi, has_roof_garden,
-        has_parking, has_storage,
-        document_type, description,
-        latitude, longitude, photos, video,
-        status, created_at, updated_at
-      ) VALUES (
-        ?, ?, ?, ?,
-        ?, ?, ?, ?,
-        ?, ?, ?, ?,
-        ?, ?,
-        ?, ?,
-        ?, ?, ?, ?,
-        ?, datetime('now'), datetime('now')
-      )
-    `).run(
-      villaCode,
-      data.city ?? null,
-      data.area_type ?? null,
-      data.price ?? null,
-      data.land_size ?? null,
-      data.building_size ?? null,
-      data.bedrooms ?? null,
-      data.master_bedrooms ?? 0,
-      data.is_townhouse ?? 0,
-      data.has_pool ?? 0,
-      data.has_jacuzzi ?? 0,
-      data.has_roof_garden ?? 0,
-      data.has_parking ?? 0,
-      data.has_storage ?? 0,
-      data.document_type ?? null,
-      data.description ?? null,
-      data.latitude ?? null,
-      data.longitude ?? null,
-      data.photos ?? null,
-      data.video ?? null,
-      data.status ?? "draft",
-    );
-
-    const created = db
-      .prepare("SELECT * FROM villas WHERE villa_code = ?")
-      .get(villaCode);
+    const villaCode = await getNextVillaCode();
+    const [created] = await db.insert(villasTable).values({
+      villa_code: villaCode,
+      city: data.city ?? null,
+      area_type: data.area_type ?? null,
+      price: data.price ?? null,
+      land_size: data.land_size ?? null,
+      building_size: data.building_size ?? null,
+      bedrooms: data.bedrooms ?? null,
+      master_bedrooms: data.master_bedrooms ?? 0,
+      is_townhouse: data.is_townhouse ?? 0,
+      has_pool: data.has_pool ?? 0,
+      has_jacuzzi: data.has_jacuzzi ?? 0,
+      has_roof_garden: data.has_roof_garden ?? 0,
+      has_parking: data.has_parking ?? 0,
+      has_storage: data.has_storage ?? 0,
+      document_type: data.document_type ?? null,
+      description: data.description ?? null,
+      latitude: data.latitude ?? null,
+      longitude: data.longitude ?? null,
+      photos: data.photos ?? null,
+      video: data.video ?? null,
+      status: data.status ?? "draft",
+    }).returning();
     res.status(201).json(created);
-  } finally {
-    db.close();
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// GET /villas/:id
-router.get("/villas/:id", (req, res) => {
+router.get("/villas/:id", async (req, res) => {
   const parsed = GetVillaParams.safeParse({ id: Number(req.params.id) });
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid id" });
     return;
   }
 
-  const db = getDb();
   try {
-    const row = db
-      .prepare("SELECT * FROM villas WHERE id = ?")
-      .get(parsed.data.id);
+    const [row] = await db.select().from(villasTable).where(eq(villasTable.id, parsed.data.id));
     if (!row) {
       res.status(404).json({ error: "Villa not found" });
       return;
     }
     res.json(row);
-  } finally {
-    db.close();
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// PUT /villas/:id  — full update
-router.put("/villas/:id", (req, res) => {
+router.put("/villas/:id", async (req, res) => {
   const idParsed = UpdateVillaParams.safeParse({ id: Number(req.params.id) });
   const bodyParsed = UpdateVillaBody.safeParse(req.body);
 
-  if (!idParsed.success) {
-    res.status(400).json({ error: "Invalid id" });
-    return;
-  }
-  if (!bodyParsed.success) {
-    res.status(400).json({ error: "Invalid request body", details: bodyParsed.error.flatten() });
-    return;
-  }
+  if (!idParsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
+  if (!bodyParsed.success) { res.status(400).json({ error: "Invalid request body", details: bodyParsed.error.flatten() }); return; }
 
-  const db = getDb();
   try {
-    const existing = db
-      .prepare("SELECT * FROM villas WHERE id = ?")
-      .get(idParsed.data.id);
-    if (!existing) {
-      res.status(404).json({ error: "Villa not found" });
-      return;
-    }
+    const existing = await db.select().from(villasTable).where(eq(villasTable.id, idParsed.data.id));
+    if (!existing.length) { res.status(404).json({ error: "Villa not found" }); return; }
 
     const data = bodyParsed.data;
-    db.prepare(`
-      UPDATE villas SET
-        city = ?, area_type = ?, price = ?,
-        land_size = ?, building_size = ?, bedrooms = ?, master_bedrooms = ?,
-        is_townhouse = ?, has_pool = ?, has_jacuzzi = ?,
-        has_roof_garden = ?, has_parking = ?, has_storage = ?,
-        document_type = ?, description = ?,
-        latitude = ?, longitude = ?,
-        photos = ?, video = ?,
-        status = ?,
-        updated_at = datetime('now')
-      WHERE id = ?
-    `).run(
-      data.city ?? null,
-      data.area_type ?? null,
-      data.price ?? null,
-      data.land_size ?? null,
-      data.building_size ?? null,
-      data.bedrooms ?? null,
-      data.master_bedrooms ?? 0,
-      data.is_townhouse ?? 0,
-      data.has_pool ?? 0,
-      data.has_jacuzzi ?? 0,
-      data.has_roof_garden ?? 0,
-      data.has_parking ?? 0,
-      data.has_storage ?? 0,
-      data.document_type ?? null,
-      data.description ?? null,
-      data.latitude ?? null,
-      data.longitude ?? null,
-      data.photos ?? null,
-      data.video ?? null,
-      data.status ?? "draft",
-      idParsed.data.id,
-    );
-
-    const updated = db
-      .prepare("SELECT * FROM villas WHERE id = ?")
-      .get(idParsed.data.id);
+    const [updated] = await db.update(villasTable).set({
+      city: data.city ?? null,
+      area_type: data.area_type ?? null,
+      price: data.price ?? null,
+      land_size: data.land_size ?? null,
+      building_size: data.building_size ?? null,
+      bedrooms: data.bedrooms ?? null,
+      master_bedrooms: data.master_bedrooms ?? 0,
+      is_townhouse: data.is_townhouse ?? 0,
+      has_pool: data.has_pool ?? 0,
+      has_jacuzzi: data.has_jacuzzi ?? 0,
+      has_roof_garden: data.has_roof_garden ?? 0,
+      has_parking: data.has_parking ?? 0,
+      has_storage: data.has_storage ?? 0,
+      document_type: data.document_type ?? null,
+      description: data.description ?? null,
+      latitude: data.latitude ?? null,
+      longitude: data.longitude ?? null,
+      photos: data.photos ?? null,
+      video: data.video ?? null,
+      status: data.status ?? "draft",
+      updated_at: new Date(),
+    }).where(eq(villasTable.id, idParsed.data.id)).returning();
     res.json(updated);
-  } finally {
-    db.close();
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// PATCH /villas/:id  — status-only update
-router.patch("/villas/:id", (req, res) => {
+router.patch("/villas/:id", async (req, res) => {
   const idParsed = UpdateVillaStatusParams.safeParse({ id: Number(req.params.id) });
   const bodyParsed = UpdateVillaStatusBody.safeParse(req.body);
 
@@ -321,57 +204,35 @@ router.patch("/villas/:id", (req, res) => {
     return;
   }
 
-  const db = getDb();
   try {
-    const existing = db
-      .prepare("SELECT * FROM villas WHERE id = ?")
-      .get(idParsed.data.id);
-    if (!existing) {
-      res.status(404).json({ error: "Villa not found" });
-      return;
-    }
+    const existing = await db.select().from(villasTable).where(eq(villasTable.id, idParsed.data.id));
+    if (!existing.length) { res.status(404).json({ error: "Villa not found" }); return; }
 
-    db.prepare(
-      "UPDATE villas SET status = ?, updated_at = datetime('now') WHERE id = ?"
-    ).run(bodyParsed.data.status, idParsed.data.id);
-
-    const updated = db
-      .prepare("SELECT * FROM villas WHERE id = ?")
-      .get(idParsed.data.id);
+    const [updated] = await db.update(villasTable)
+      .set({ status: bodyParsed.data.status, updated_at: new Date() })
+      .where(eq(villasTable.id, idParsed.data.id))
+      .returning();
     res.json(updated);
-  } finally {
-    db.close();
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// DELETE /villas/:id  — archive (never permanently deletes)
-router.delete("/villas/:id", (req, res) => {
+router.delete("/villas/:id", async (req, res) => {
   const parsed = ArchiveVillaParams.safeParse({ id: Number(req.params.id) });
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid id" });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const db = getDb();
   try {
-    const existing = db
-      .prepare("SELECT * FROM villas WHERE id = ?")
-      .get(parsed.data.id);
-    if (!existing) {
-      res.status(404).json({ error: "Villa not found" });
-      return;
-    }
+    const existing = await db.select().from(villasTable).where(eq(villasTable.id, parsed.data.id));
+    if (!existing.length) { res.status(404).json({ error: "Villa not found" }); return; }
 
-    db.prepare(
-      "UPDATE villas SET status = 'archived', updated_at = datetime('now') WHERE id = ?"
-    ).run(parsed.data.id);
-
-    const archived = db
-      .prepare("SELECT * FROM villas WHERE id = ?")
-      .get(parsed.data.id);
+    const [archived] = await db.update(villasTable)
+      .set({ status: "archived", updated_at: new Date() })
+      .where(eq(villasTable.id, parsed.data.id))
+      .returning();
     res.json(archived);
-  } finally {
-    db.close();
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
