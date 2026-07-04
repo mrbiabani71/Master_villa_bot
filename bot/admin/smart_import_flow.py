@@ -62,6 +62,7 @@ EDITABLE_FIELDS: list[tuple[str, str, str]] = [
     ("has_roof_garden", "🌿 روف گاردن",       "bool"),
     ("has_parking",     "🚗 پارکینگ",         "bool"),
     ("has_storage",     "📦 انباری",          "bool"),
+    ("document_type",   "📄 نوع سند",         "str"),
     ("description",     "📝 توضیحات",         "str"),
 ]
 
@@ -341,7 +342,12 @@ async def cb_field_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     label, vtype = _FIELD_MAP[field]
     data: VillaData = context.user_data["si_data"]
-    current = getattr(data, field)
+
+    # document_type is a virtual field backed by data.documents (list)
+    if field == "document_type":
+        current = "، ".join(data.documents) if data.documents else ""
+    else:
+        current = getattr(data, field)
 
     if vtype == "bool":
         # Toggle immediately — no text input needed
@@ -397,6 +403,20 @@ async def handle_edit_value(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     error: str | None = None
     new_val = None
 
+    if field == "document_type":
+        # Virtual field — store as list in data.documents
+        if raw and raw != "—":
+            data.documents = [s.strip() for s in raw.replace(",", "،").split("،") if s.strip()]
+        else:
+            data.documents = []
+        context.user_data.pop("si_edit_field", None)
+        await update.message.reply_text(
+            f"✅ *📄 نوع سند* به‌روز شد.\n\n" + _build_preview(data),
+            parse_mode="Markdown",
+            reply_markup=_preview_keyboard(),
+        )
+        return SI_PREVIEW
+
     if vtype == "str":
         new_val = raw if raw and raw != "—" else None
     elif vtype == "float":
@@ -429,6 +449,15 @@ async def handle_edit_value(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     return SI_PREVIEW
 
 
+# ── Non-text guard for SI_WAITING_TEXT ───────────────────────────────────────
+
+async def _prompt_text_only(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text(
+        "⚠️ لطفاً متن آگهی ویلا را ارسال کنید (نه عکس یا فایل)."
+    )
+    return SI_WAITING_TEXT
+
+
 # ── Cancel command ────────────────────────────────────────────────────────────
 
 async def _cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -450,6 +479,7 @@ def build_smart_import_conv() -> ConversationHandler:
         states={
             SI_WAITING_TEXT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_import_text),
+                MessageHandler(~filters.COMMAND, _prompt_text_only),
             ],
             SI_PREVIEW: [
                 CallbackQueryHandler(cb_confirm, pattern="^si_confirm$"),
