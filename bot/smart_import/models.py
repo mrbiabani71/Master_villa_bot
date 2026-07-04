@@ -48,6 +48,9 @@ class VillaData:
     # Free-text description (includes unrecognised lines)
     description: str = ""
 
+    # Photo file_ids collected during the Telegram import flow
+    photos: list[str] = field(default_factory=list)
+
     # Original raw text for audit / debugging
     raw_text: str = ""
 

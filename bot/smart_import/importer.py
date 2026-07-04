@@ -86,7 +86,7 @@ def _do_create(data: VillaData) -> ImportResult:
         "description":    data.description,
         "latitude":       None,
         "longitude":      None,
-        "photos":         [],
+        "photos":         list(data.photos),
         "video":          None,
     }
 

@@ -11,6 +11,7 @@ from telegram import (
     Update,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
 )
 from telegram.ext import (
@@ -29,7 +30,7 @@ from keyboards import get_main_keyboard
 from smart_import.parser import parse_villa_text
 from smart_import.importer import import_villa
 from smart_import.models import VillaData
-from states import SI_WAITING_TEXT, SI_PREVIEW, SI_EDIT_FIELD, SI_EDIT_VALUE
+from states import SI_WAITING_TEXT, SI_PREVIEW, SI_EDIT_FIELD, SI_EDIT_VALUE, SI_PHOTOS
 
 logger = logging.getLogger(__name__)
 
@@ -214,7 +215,14 @@ async def handle_import_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return SI_PREVIEW
 
 
-# ── Step 3a: confirm → save ───────────────────────────────────────────────────
+# ── Photos keyboard ───────────────────────────────────────────────────────────
+
+_PHOTOS_KB = ReplyKeyboardMarkup(
+    [["✅ ذخیره ویلا"], ["⏭ ذخیره بدون عکس"]],
+    resize_keyboard=True,
+)
+
+# ── Step 3a: confirm → collect photos ────────────────────────────────────────
 
 async def cb_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
@@ -225,26 +233,71 @@ async def cb_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await query.edit_message_text("❌ داده‌ای یافت نشد. لطفاً دوباره شروع کنید.")
         return ConversationHandler.END
 
-    result = import_villa(data, mode="create")
+    context.user_data["si_photos"] = []
 
-    if result.success:
-        context.user_data.clear()
-        await query.edit_message_text(
-            f"✅ ویلا با کد *{result.villa_code}* با موفقیت ذخیره شد.",
-            parse_mode="Markdown",
-        )
-        await context.bot.send_message(
-            update.effective_user.id,
-            "می‌توانید ویلای جدیدی ثبت کنید.",
+    await query.edit_message_text(
+        "📷 *ارسال عکس‌ها*\n\n"
+        "عکس‌های ویلا را یک‌به‌یک ارسال کنید.\n"
+        "پس از پایان «✅ ذخیره ویلا» را بزنید.",
+        parse_mode="Markdown",
+    )
+    await context.bot.send_message(
+        update.effective_user.id,
+        "📷 عکس‌ها را ارسال کنید یا مستقیم ذخیره کنید:",
+        reply_markup=_PHOTOS_KB,
+    )
+    return SI_PHOTOS
+
+
+# ── Step 3a-i: photo received ─────────────────────────────────────────────────
+
+async def handle_si_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    file_id = update.message.photo[-1].file_id
+    photos: list = context.user_data.setdefault("si_photos", [])
+    photos.append(file_id)
+    count = len(photos)
+    await update.message.reply_text(
+        f"✅ عکس {count} دریافت شد.",
+        reply_markup=_PHOTOS_KB,
+    )
+    return SI_PHOTOS
+
+
+# ── Step 3a-ii: save with photos ─────────────────────────────────────────────
+
+async def handle_si_save(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    data: VillaData | None = context.user_data.get("si_data")
+    if data is None:
+        await update.message.reply_text(
+            "❌ خطای داخلی. لطفاً دوباره شروع کنید.",
             reply_markup=get_main_keyboard(update.effective_user.id),
         )
         return ConversationHandler.END
-    else:
-        await query.edit_message_text(
-            f"❌ خطا در ذخیره:\n{result.error}",
-            reply_markup=_preview_keyboard(),
+
+    data.photos = context.user_data.get("si_photos", [])
+    result = import_villa(data, mode="create")
+    context.user_data.clear()
+
+    if result.success:
+        photo_note = f"  |  {len(data.photos)} عکس" if data.photos else ""
+        await update.message.reply_text(
+            f"✅ ویلا با کد *{result.villa_code}* ذخیره شد{photo_note}.",
+            parse_mode="Markdown",
+            reply_markup=get_main_keyboard(update.effective_user.id),
         )
-        return SI_PREVIEW
+    else:
+        await update.message.reply_text(
+            f"❌ خطا در ذخیره:\n{result.error}",
+            reply_markup=get_main_keyboard(update.effective_user.id),
+        )
+    return ConversationHandler.END
+
+
+# ── Step 3a-iii: skip photos → save without them ─────────────────────────────
+
+async def handle_si_skip_photos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data["si_photos"] = []
+    return await handle_si_save(update, context)
 
 
 # ── Step 3b: cancel ───────────────────────────────────────────────────────────
@@ -409,6 +462,11 @@ def build_smart_import_conv() -> ConversationHandler:
             ],
             SI_EDIT_VALUE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_edit_value),
+            ],
+            SI_PHOTOS: [
+                MessageHandler(filters.PHOTO, handle_si_photo),
+                MessageHandler(filters.Regex("^✅ ذخیره ویلا$"), handle_si_save),
+                MessageHandler(filters.Regex("^⏭ ذخیره بدون عکس$"), handle_si_skip_photos),
             ],
         },
         fallbacks=[

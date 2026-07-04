@@ -26,7 +26,7 @@ VISIT_NAME, VISIT_PHONE = range(17, 19)
 CONSULT_NAME, CONSULT_PHONE, CONSULT_REGION, CONSULT_BUDGET, CONSULT_CONFIRM = range(19, 24)
 
 # ── Admin: Smart Import states ──────────────────────────────────────────────────
-SI_WAITING_TEXT, SI_PREVIEW, SI_EDIT_FIELD, SI_EDIT_VALUE = range(24, 28)
+SI_WAITING_TEXT, SI_PREVIEW, SI_EDIT_FIELD, SI_EDIT_VALUE, SI_PHOTOS = range(24, 29)
 
 # ── Feature metadata ───────────────────────────────────────────────────────────
 FEATURE_KEYS = ["has_pool", "has_jacuzzi", "has_roof_garden", "has_parking", "has_storage"]

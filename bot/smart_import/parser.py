@@ -91,14 +91,14 @@ def _match_city(line: str) -> tuple[str, str] | None:
     return None
 
 def _match_land(line: str) -> float | None:
-    """Lines like '210 زمین', 'زمین 210', 'متراژ زمین 210'."""
-    if "زمین" not in line:
+    """Lines like '210 زمین', 'زمین 210', 'متراژ زمین 210', or emoji-prefixed '📐 210'."""
+    if "زمین" not in line and not line.startswith("📐"):
         return None
     return _first_float(line)
 
 def _match_building(line: str) -> float | None:
-    """Lines like '200 بنا', 'بنا 200', 'زیربنا 200'."""
-    if "بنا" not in line:
+    """Lines like '200 بنا', 'بنا 200', 'زیربنا 200', or emoji-prefixed '🏠 150'."""
+    if "بنا" not in line and not line.startswith("🏠"):
         return None
     return _first_float(line)
 

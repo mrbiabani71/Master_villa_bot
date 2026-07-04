@@ -647,7 +647,7 @@ def test_db_insertion():
     contains("J1 DB document_type",    row["document_type"],   "پروانه ساخت")
     contains("J1 DB document_type",    row["document_type"],   "سند تک برگ")
     contains("J1 DB description",      row["description"],     "ویلای لوکس نزدیک جنگل")
-    eq("J1 DB status",                 row["status"],          "active")
+    eq("J1 DB status",                 row["status"],          "published")
 
     # --- J2: feature flags round-trip ---
     text_j2 = """MV-841
