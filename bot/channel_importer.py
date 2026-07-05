@@ -74,16 +74,22 @@ async def _save_villa(bot: Bot, text: str, photo_ids: list[str]) -> None:
         data.villa_code, data.city, data.price, len(data.photos),
     )
 
-    # Require at least city or price to be parseable — otherwise the post
-    # is probably something unrelated (admin note, etc.)
-    if data.city is None and data.price is None:
-        logger.warning(
-            "CHANNEL_IMPORT | REJECTED — neither city nor price found in text"
-        )
-        await bot.send_message(
-            ADMIN_ID,
-            "⚠️ پست کانال دریافت شد اما شهر یا قیمتی شناسایی نشد.\n"
-            "مطمئن شو که نام شهر و قیمت در متن وجود دارند.",
+    # All four fields must be present before we touch the database.
+    # If any is missing the post is incomplete — ignore it silently.
+    missing = [
+        name
+        for name, val in [
+            ("city",          data.city),
+            ("price",         data.price),
+            ("land_size",     data.land_size),
+            ("building_size", data.building_size),
+        ]
+        if val is None
+    ]
+    if missing:
+        logger.info(
+            "CHANNEL_IMPORT | IGNORED — missing required fields: %s",
+            ", ".join(missing),
         )
         return
 
