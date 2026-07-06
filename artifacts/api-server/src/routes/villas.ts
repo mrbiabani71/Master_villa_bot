@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, villasTable } from "@workspace/db";
-import { eq, sql, ne } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   ListVillasQueryParams,
   CreateVillaBody,
@@ -18,8 +18,16 @@ const MAX_PAGE_SIZE = 100;
 const DEFAULT_PAGE_SIZE = 20;
 
 async function getNextVillaCode(): Promise<string> {
+  // The regex is passed as a parameter so the literal '$' never appears as a
+  // raw character inside the tagged-template string — esbuild misparses a
+  // bare '$' immediately before the closing backtick of a tagged template.
+  const mvPattern = "^MV-[0-9]+$";
   const result = await db.execute(
-    sql`SELECT MAX(CAST(SUBSTRING(villa_code, 4) AS INTEGER)) AS max_num FROM villas`
+    sql`SELECT MAX(
+          CASE WHEN villa_code ~ ${mvPattern}
+          THEN CAST(SUBSTRING(villa_code, 4) AS INTEGER)
+          END
+        ) AS max_num FROM villas`
   );
   const maxNum = (result.rows[0] as { max_num: number | null }).max_num;
   const next = (maxNum ?? 1000) + 1;
@@ -106,6 +114,19 @@ router.post("/villas", async (req, res) => {
 
   try {
     const villaCode = data.villa_code?.trim() || await getNextVillaCode();
+
+    // If caller supplied an explicit code, reject it early if it already exists.
+    if (data.villa_code?.trim()) {
+      const [existing] = await db
+        .select({ id: villasTable.id })
+        .from(villasTable)
+        .where(eq(villasTable.villa_code, villaCode));
+      if (existing) {
+        res.status(409).json({ error: `Villa code '${villaCode}' already exists` });
+        return;
+      }
+    }
+
     const [created] = await db.insert(villasTable).values({
       villa_code: villaCode,
       city: data.city ?? null,
@@ -130,7 +151,19 @@ router.post("/villas", async (req, res) => {
       status: data.status ?? "draft",
     }).returning();
     res.status(201).json(created);
-  } catch (err) {
+  } catch (err: unknown) {
+    // PostgreSQL unique-constraint violation (code 23505) — catches the race
+    // where two concurrent requests with the same explicit code both pass the
+    // pre-check above, but only one INSERT succeeds.
+    if (
+      err !== null &&
+      typeof err === "object" &&
+      "code" in err &&
+      (err as { code: string }).code === "23505"
+    ) {
+      res.status(409).json({ error: `Villa code '${villaCode}' already exists` });
+      return;
+    }
     res.status(500).json({ error: "Internal server error" });
   }
 });
