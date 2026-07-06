@@ -105,7 +105,7 @@ router.post("/villas", async (req, res) => {
   const data = parsed.data;
 
   try {
-    const villaCode = await getNextVillaCode();
+    const villaCode = data.villa_code?.trim() || await getNextVillaCode();
     const [created] = await db.insert(villasTable).values({
       villa_code: villaCode,
       city: data.city ?? null,

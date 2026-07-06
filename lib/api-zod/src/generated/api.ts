@@ -75,6 +75,7 @@ export const createVillaBodyHasParkingDefault = 0;
 export const createVillaBodyHasStorageDefault = 0;
 
 export const CreateVillaBody = zod.object({
+  "villa_code": zod.string().nullish(),
   "city": zod.string().nullish(),
   "area_type": zod.string().nullish(),
   "price": zod.number().nullish(),

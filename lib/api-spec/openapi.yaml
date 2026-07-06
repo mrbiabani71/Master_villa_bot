@@ -402,6 +402,13 @@ components:
     CreateVillaRequest:
       type: object
       properties:
+        villa_code:
+          type: string
+          nullable: true
+          description: >
+            Optional MV code (e.g. "MV-1042"). When provided the server uses
+            it as-is and skips auto-generation. When omitted the server assigns
+            the next available code automatically.
         city:
           type: string
           nullable: true
