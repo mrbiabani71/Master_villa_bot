@@ -1,12 +1,13 @@
 """
-Importer — takes a parsed VillaData and writes it to the database.
+Importer — takes a parsed VillaData and writes it to PostgreSQL via the API.
 
 Designed for extensibility:
   import_villa(data, mode="create")   → implemented
   import_villa(data, mode="update")   → stub (add _do_update when ready)
   import_villa(data, mode="upsert")   → stub (add _do_upsert when ready)
 
-No Telegram, no channel IDs — purely DB-facing.
+No Telegram, no channel IDs — purely storage-facing.
+Villa records are stored in PostgreSQL; SQLite is not used here.
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 def import_villa(data: VillaData, mode: ImportMode = "create") -> ImportResult:
     """
-    Persist a parsed villa to the database.
+    Persist a parsed villa to PostgreSQL via the local API server.
 
     Parameters
     ----------
@@ -44,63 +45,64 @@ def import_villa(data: VillaData, mode: ImportMode = "create") -> ImportResult:
 # ── create ────────────────────────────────────────────────────────────────────
 
 def _do_create(data: VillaData) -> ImportResult:
-    # Import here to keep this module importable without a running DB
-    from database import get_next_villa_code, get_villa_by_code, insert_villa
+    # Lazy import keeps this module usable without the API server running at
+    # import time (mirrors the original pattern of deferring DB imports).
+    from pg_villas import create_villa
 
-    # ── 1. Resolve villa code ─────────────────────────────────────────────────
-    if data.villa_code:
-        # Provided by text: check for duplicates
-        existing = get_villa_by_code(data.villa_code)
-        if existing:
-            return ImportResult(
-                success=False,
-                villa_code=data.villa_code,
-                mode="create",
-                error=f"کد ویلا {data.villa_code} قبلاً ثبت شده است.",
-            )
-        villa_code = data.villa_code
-    else:
-        # Auto-generate
-        villa_code = get_next_villa_code()
-
-    # ── 2. Build DB row ───────────────────────────────────────────────────────
-    # Join documents list → single string for document_type column
+    # ── 1. Build API payload ──────────────────────────────────────────────────
     document_type = "، ".join(data.documents) if data.documents else ""
 
-    db_data: dict = {
-        "villa_code":     villa_code,
-        "city":           data.city or "",
-        "area_type":      data.area_type or "",
-        "price":          data.price,
-        "land_size":      data.land_size,
-        "building_size":  data.building_size,
-        "bedrooms":       data.bedrooms,
+    api_payload: dict = {
+        "city":            data.city or "",
+        "area_type":       data.area_type or "",
+        "price":           data.price,
+        "land_size":       data.land_size,
+        "building_size":   data.building_size,
+        "bedrooms":        data.bedrooms,
         "master_bedrooms": data.master_bedrooms,
-        "is_townhouse":   0,
-        "has_pool":       data.has_pool,
-        "has_jacuzzi":    data.has_jacuzzi,
+        "is_townhouse":    0,
+        "has_pool":        data.has_pool,
+        "has_jacuzzi":     data.has_jacuzzi,
         "has_roof_garden": data.has_roof_garden,
-        "has_parking":    data.has_parking,
-        "has_storage":    data.has_storage,
-        "document_type":  document_type,
-        "description":    data.description,
-        "latitude":       None,
-        "longitude":      None,
-        "photos":         list(data.photos),
-        "video":          None,
+        "has_parking":     data.has_parking,
+        "has_storage":     data.has_storage,
+        "document_type":   document_type,
+        "description":     data.description,
+        "latitude":        None,
+        "longitude":       None,
+        "photos":          ",".join(data.photos) if data.photos else None,
+        "video":           None,
+        "status":          "published",
     }
+    # Include villa_code only when explicitly provided; omit it so the API
+    # auto-generates the next MV-NNNN code when none is supplied.
+    if data.villa_code:
+        api_payload["villa_code"] = data.villa_code
 
-    # ── 3. Insert ─────────────────────────────────────────────────────────────
+    # ── 2. Create via API (handles duplicate check + DB write atomically) ─────
     try:
-        villa_id = insert_villa(db_data)
-    except Exception as exc:
-        logger.exception("smart_import: DB insert failed for code=%s", villa_code)
+        created = create_villa(api_payload)
+    except ValueError as exc:
+        # 409 duplicate code or 400 bad data — clean, human-readable message
         return ImportResult(
             success=False,
-            villa_code=villa_code,
+            villa_code=data.villa_code or "",
             mode="create",
-            error=f"خطای پایگاه داده: {exc}",
+            error=str(exc),
         )
+    except Exception as exc:
+        logger.exception(
+            "smart_import: API create failed for code=%s", data.villa_code or "(auto)"
+        )
+        return ImportResult(
+            success=False,
+            villa_code=data.villa_code or "",
+            mode="create",
+            error=f"خطای ذخیره‌سازی: {exc}",
+        )
+
+    villa_code = created["villa_code"]
+    villa_id   = created["id"]
 
     logger.info(
         "smart_import: created villa code=%s id=%s city=%s price=%s",
@@ -122,9 +124,9 @@ def _do_update(data: VillaData) -> ImportResult:
     Stub — implement when the Update Existing Villa workflow is ready.
 
     To implement:
-      1. Add update_villa(villa_code, fields: dict) to database.py
+      1. Add PUT /villas/:id support to pg_villas (or call the API directly)
       2. Build the fields dict from data (same logic as _do_create)
-      3. Call update_villa and return ImportResult(success=True, ...)
+      3. Call the update function and return ImportResult(success=True, ...)
     """
     return ImportResult(
         success=False,
@@ -145,7 +147,7 @@ def _do_upsert(data: VillaData) -> ImportResult:
         # No code → can only be a new villa
         return _do_create(data)
 
-    from database import get_villa_by_code
+    from pg_villas import get_villa_by_code
     existing = get_villa_by_code(data.villa_code)
     if existing:
         return _do_update(data)
