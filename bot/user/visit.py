@@ -16,7 +16,8 @@ from telegram.ext import (
 )
 
 from config import ADMIN_ID
-from database import get_villa_by_id, get_villa_by_code, insert_visit_request
+from database import insert_visit_request
+from pg_villas import get_villa_by_id, get_villa_by_code
 from keyboards import get_main_keyboard
 from states import VISIT_NAME, VISIT_PHONE
 from utils import fmt_price

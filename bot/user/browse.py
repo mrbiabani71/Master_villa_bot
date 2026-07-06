@@ -15,7 +15,7 @@ from telegram.ext import (
     filters,
 )
 
-from database import search_villas, get_villa_by_id
+from pg_villas import search_villas, get_villa_by_id
 from keyboards import get_main_keyboard
 from states import BROWSE_AREA, BROWSE_BUDGET
 from utils import fmt_price, price_category
