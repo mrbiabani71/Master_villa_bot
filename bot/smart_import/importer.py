@@ -116,23 +116,91 @@ def _do_create(data: VillaData) -> ImportResult:
     )
 
 
-# ── update (stub) ─────────────────────────────────────────────────────────────
+# ── update ────────────────────────────────────────────────────────────────────
 
 def _do_update(data: VillaData) -> ImportResult:
     """
     Update an existing villa by villa_code.
-    Stub — implement when the Update Existing Villa workflow is ready.
 
-    To implement:
-      1. Add PUT /villas/:id support to pg_villas (or call the API directly)
-      2. Build the fields dict from data (same logic as _do_create)
-      3. Call the update function and return ImportResult(success=True, ...)
+    Fetches the existing row to obtain the numeric id and preserve fields that
+    are not exposed by VillaData (latitude, longitude, video, is_townhouse).
+    All VillaData fields are written, so the caller is responsible for loading
+    the full villa before calling this (do not pass a partially-filled object).
     """
+    from pg_villas import get_villa_by_code, update_villa
+
+    if not data.villa_code:
+        return ImportResult(
+            success=False,
+            villa_code="",
+            mode="update",
+            error="کد ویلا برای ویرایش الزامی است.",
+        )
+
+    existing = get_villa_by_code(data.villa_code)
+    if not existing:
+        return ImportResult(
+            success=False,
+            villa_code=data.villa_code,
+            mode="update",
+            error=f"ویلا با کد {data.villa_code} یافت نشد.",
+        )
+
+    villa_id       = existing["id"]
+    document_type  = "، ".join(data.documents) if data.documents else ""
+
+    api_payload: dict = {
+        "city":            data.city or "",
+        "area_type":       data.area_type or "",
+        "price":           data.price,
+        "land_size":       data.land_size,
+        "building_size":   data.building_size,
+        "bedrooms":        data.bedrooms,
+        "master_bedrooms": data.master_bedrooms,
+        "is_townhouse":    existing.get("is_townhouse", 0),
+        "has_pool":        data.has_pool,
+        "has_jacuzzi":     data.has_jacuzzi,
+        "has_roof_garden": data.has_roof_garden,
+        "has_parking":     data.has_parking,
+        "has_storage":     data.has_storage,
+        "document_type":   document_type,
+        "description":     data.description,
+        "latitude":        existing.get("latitude"),
+        "longitude":       existing.get("longitude"),
+        "photos":          ",".join(data.photos) if data.photos else None,
+        "video":           existing.get("video"),
+        "status":          existing.get("status", "published"),
+    }
+
+    try:
+        updated = update_villa(villa_id, api_payload)
+    except ValueError as exc:
+        return ImportResult(
+            success=False,
+            villa_code=data.villa_code,
+            mode="update",
+            error=str(exc),
+        )
+    except Exception as exc:
+        logger.exception(
+            "smart_import: API update failed for code=%s", data.villa_code
+        )
+        return ImportResult(
+            success=False,
+            villa_code=data.villa_code,
+            mode="update",
+            error=f"خطای ذخیره‌سازی: {exc}",
+        )
+
+    logger.info(
+        "smart_import: updated villa code=%s id=%s city=%s price=%s",
+        data.villa_code, villa_id, data.city, data.price,
+    )
     return ImportResult(
-        success=False,
+        success=True,
         villa_code=data.villa_code,
+        villa_id=villa_id,
         mode="update",
-        error="حالت update هنوز پیاده‌سازی نشده است.",
     )
 
 

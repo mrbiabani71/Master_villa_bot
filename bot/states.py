@@ -9,3 +9,6 @@ CONSULT_NAME, CONSULT_PHONE, CONSULT_REGION, CONSULT_BUDGET, CONSULT_CONFIRM = r
 
 # ── Admin: Smart Import states ──────────────────────────────────────────────────
 SI_WAITING_TEXT, SI_PREVIEW, SI_EDIT_FIELD, SI_EDIT_VALUE, SI_PHOTOS = range(24, 29)
+
+# ── Admin: Edit Villa states ─────────────────────────────────────────────────────
+EV_WAITING_CODE, EV_PREVIEW, EV_EDIT_FIELD, EV_EDIT_VALUE, EV_PHOTOS = range(29, 34)

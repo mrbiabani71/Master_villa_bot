@@ -15,9 +15,9 @@ admin_main_keyboard = ReplyKeyboardMarkup(_admin_menu, resize_keyboard=True)
 
 admin_panel_keyboard = ReplyKeyboardMarkup(
     [
-        ["➕ ثبت ویلا", "📋 درخواست‌ها"],
-        ["📊 آمار", "⚙️ تنظیمات"],
-        ["⬅️ بازگشت"],
+        ["➕ ثبت ویلا", "✏️ ویرایش ویلا"],
+        ["📋 درخواست‌ها", "📊 آمار"],
+        ["⚙️ تنظیمات", "⬅️ بازگشت"],
     ],
     resize_keyboard=True,
 )

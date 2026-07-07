@@ -118,6 +118,40 @@ def create_villa(data: dict) -> dict:
     raise RuntimeError(f"API error {r.status_code}: {message}")
 
 
+def update_villa(villa_id: int, data: dict) -> dict:
+    """
+    Update an existing villa via PUT /api/villas/:id.
+
+    ``data`` must contain all writable fields (same shape as _do_create payload).
+    Returns the updated villa dict on success (HTTP 200).
+    Raises ``ValueError`` on 400 (invalid data) or 404 (not found).
+    Raises ``RuntimeError`` on network failures or unexpected HTTP responses.
+    """
+    try:
+        with httpx.Client(timeout=10) as client:
+            r = client.put(f"{API_BASE}/villas/{villa_id}", json=data)
+    except Exception as exc:
+        logger.error("pg_villas | network error PUT /villas/%s: %s", villa_id, exc)
+        raise RuntimeError(f"Network error while updating villa: {exc}") from exc
+
+    if r.status_code == 200:
+        return r.json()
+
+    try:
+        body = r.json()
+        message = body.get("error") or str(body)
+    except Exception:
+        message = r.text or f"HTTP {r.status_code}"
+
+    if r.status_code == 404:
+        raise ValueError(f"Villa not found: {message}")
+    if r.status_code == 400:
+        raise ValueError(f"Invalid villa data: {message}")
+
+    logger.error("pg_villas | unexpected %s from PUT /villas/%s: %s", r.status_code, villa_id, message)
+    raise RuntimeError(f"API error {r.status_code}: {message}")
+
+
 def get_villa_by_code(villa_code: str) -> dict | None:
     """
     Fetch a single villa by MV code.

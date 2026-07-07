@@ -4,7 +4,7 @@ from telegram.ext import ContextTypes
 from config import ADMIN_ID
 from keyboards import admin_panel_keyboard, settings_keyboard, get_main_keyboard
 
-ADMIN_PANEL_BUTTONS = {"📋 درخواست‌ها", "📊 آمار", "⚙️ تنظیمات", "⬅️ بازگشت"}
+ADMIN_PANEL_BUTTONS = {"📋 درخواست‌ها", "📊 آمار", "⚙️ تنظیمات", "✏️ ویرایش ویلا", "⬅️ بازگشت"}
 SETTINGS_BUTTONS = {"🏙 مدیریت شهرها", "📍 مدیریت مناطق", "⬅️ بازگشت"}
 
 
