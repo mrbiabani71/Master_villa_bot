@@ -16,6 +16,7 @@ from keyboards import get_main_keyboard
 from database import init_db
 from admin.panel import ADMIN_PANEL_BUTTONS, SETTINGS_BUTTONS, handle_admin_panel, handle_admin_buttons
 from admin.smart_import_flow import build_smart_import_conv
+from admin.edit_villa_flow import build_edit_villa_conv
 from admin.requests import cb_req_page, cb_req_contact, cb_req_delete
 from user.browse import build_browse_conv, browse_callback_handlers
 from user.visit import build_visit_conv, visit_callback_handlers
@@ -101,6 +102,7 @@ app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
 # ── ConversationHandlers (order matters) ───────────────────────────────────────
 app.add_handler(build_smart_import_conv())
+app.add_handler(build_edit_villa_conv())
 app.add_handler(build_consultation_conv())
 app.add_handler(build_visit_conv())   # must precede browse callbacks (intercepts browse_visit_)
 app.add_handler(build_browse_conv())
