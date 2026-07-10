@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "python-3.12", "web"]
+modules = ["nodejs-20", "python-3.12", "web", "postgresql-16"]
 
 [deployment]
 router = "application"
@@ -98,4 +98,3 @@ externalPort = 3001
 
 [userenv.shared]
 ADMIN_ID = "75515550"
-TELEGRAM_BOT_TOKEN = "8951313123:AAE0CfcN4C554Ss-zAAMlPfVDq1gM8sNQsE"
