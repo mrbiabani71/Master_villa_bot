@@ -150,6 +150,11 @@ async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE
     if post is None:
         return
 
+    logger.debug(
+        "CHANNEL_IMPORT | received update chat_id=%s message_id=%s",
+        post.chat.id, post.message_id,
+    )
+
     # If CHANNEL_ID is configured, ignore posts from other channels
     if CHANNEL_ID and post.chat.id != CHANNEL_ID:
         return
