@@ -98,3 +98,4 @@ externalPort = 3001
 
 [userenv.shared]
 ADMIN_ID = "75515550"
+CHANNEL_ID = "-1004187733480"
