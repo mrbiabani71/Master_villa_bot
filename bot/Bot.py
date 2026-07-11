@@ -1,15 +1,21 @@
 import warnings
 warnings.filterwarnings("ignore", message="If 'per_message=False'", category=Warning)
 
+import logging
+
 from telegram import Update
 from telegram.ext import (
+    Application,
     ApplicationBuilder,
     CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
+    TypeHandler,
     filters,
     ContextTypes,
 )
+
+_debug_logger = logging.getLogger("bot.update_debug")
 
 from config import TELEGRAM_BOT_TOKEN
 from keyboards import get_main_keyboard
@@ -98,7 +104,52 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 init_db()
 
-app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+
+# ── TEMPORARY DEBUG: log every received update + bot identity on startup ──────
+# Remove once channel_post delivery from the admin channel is confirmed.
+
+async def _log_startup_identity(application: Application) -> None:
+    me = await application.bot.get_me()
+    _debug_logger.warning(
+        "DEBUG_STARTUP | running as @%s (id=%s, name=%s)",
+        me.username, me.id, me.first_name,
+    )
+
+
+async def _log_every_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    update_type = next(
+        (
+            name
+            for name, val in [
+                ("message", update.message),
+                ("edited_message", update.edited_message),
+                ("channel_post", update.channel_post),
+                ("edited_channel_post", update.edited_channel_post),
+                ("callback_query", update.callback_query),
+                ("my_chat_member", update.my_chat_member),
+                ("chat_member", update.chat_member),
+            ]
+            if val is not None
+        ),
+        "other",
+    )
+    chat_id = update.effective_chat.id if update.effective_chat else None
+    _debug_logger.warning(
+        "DEBUG_UPDATE | type=%s update_id=%s chat_id=%s",
+        update_type, update.update_id, chat_id,
+    )
+
+
+app = (
+    ApplicationBuilder()
+    .token(TELEGRAM_BOT_TOKEN)
+    .post_init(_log_startup_identity)
+    .build()
+)
+
+# Group -1 runs before all other handlers, and TypeHandler(Update) matches
+# every update regardless of type, so nothing here affects import logic.
+app.add_handler(TypeHandler(Update, _log_every_update), group=-1)
 
 # ── ConversationHandlers (order matters) ───────────────────────────────────────
 app.add_handler(build_smart_import_conv())
