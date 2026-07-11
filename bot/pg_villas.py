@@ -80,6 +80,20 @@ def get_villa_by_id(villa_id: int) -> dict | None:
     return result if isinstance(result, dict) and "id" in result else None
 
 
+def get_villa_by_telegram_message_id(telegram_message_id: int) -> dict | None:
+    """
+    Fetch a single villa by its Telegram message ID.
+
+    Uses the telegram_message_id filter added to GET /api/villas.
+    Returns None if no matching villa is found or the API is unreachable.
+    """
+    result = _get("/villas", telegram_message_id=telegram_message_id, page=0, page_size=1)
+    if not result:
+        return None
+    rows: list[dict] = result.get("data", [])
+    return rows[0] if rows else None
+
+
 def create_villa(data: dict) -> dict:
     """
     Create a new villa via POST /api/villas.
@@ -122,7 +136,7 @@ def update_villa(villa_id: int, data: dict) -> dict:
     """
     Update an existing villa via PUT /api/villas/:id.
 
-    ``data`` must contain all writable fields (same shape as _do_create payload).
+    ``data`` must contain all writable fields (same shape as create payload).
     Returns the updated villa dict on success (HTTP 200).
     Raises ``ValueError`` on 400 (invalid data) or 404 (not found).
     Raises ``RuntimeError`` on network failures or unexpected HTTP responses.

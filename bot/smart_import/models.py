@@ -54,6 +54,23 @@ class VillaData:
     # Original raw text for audit / debugging
     raw_text: str = ""
 
+    # ── Extended channel-import fields ───────────────────────────────────────
+    # Extracted from Persian channel post text.
+
+    region: str | None = None           # e.g. "منطقه فریدونکنار شهرک دریایی"
+    villa_type: str | None = None       # e.g. "دوبلکس", "یک طبقه", "نوساز"
+    facade: str | None = None           # e.g. "نمای مدرن", "سنگ و چوب"
+    utilities: list[str] = field(default_factory=list)   # infrastructure lines
+    location_status: str | None = None  # e.g. "کنار دریا", "مشرف به جنگل"
+    community_status: str | None = None # e.g. "داخل شهرک", "خارج شهرک"
+
+    # ── Telegram provenance ───────────────────────────────────────────────────
+    # Set by the channel importer; None for manually-added villas.
+
+    telegram_message_id: int | None = None       # message_id of the primary post
+    telegram_media_group_id: str | None = None   # non-None for albums
+    original_caption: str = ""                   # raw Telegram caption text
+
 
 @dataclass
 class ImportResult:

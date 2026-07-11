@@ -1,2 +1,3 @@
 - [better-sqlite3 migration](better-sqlite3-migration.md) — API server migrated from SQLite (better-sqlite3) to Replit PostgreSQL; routes use drizzle-orm + pg via @workspace/db. Schema in lib/db/src/schema/index.ts.
 - [Admin panel API proxy](admin-panel-api-proxy.md) — Vite dev server needs a proxy for /api → localhost:3000 or the dashboard shows all zeros.
+- [Partial unique index + ON CONFLICT](partial-unique-index-conflicts.md) — Drizzle's onConflictDoNothing can't target a partial unique index; use raw SQL.

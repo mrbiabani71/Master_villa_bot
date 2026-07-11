@@ -1,4 +1,5 @@
-import { pgTable, serial, text, real, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, real, integer, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -25,9 +26,30 @@ export const villasTable = pgTable("villas", {
   photos: text("photos"),
   video: text("video"),
   status: text("status").notNull().default("draft"),
+
+  // ── Channel importer fields ──────────────────────────────────────────────────
+  // Telegram provenance — used for idempotent upserts by the history importer.
+  telegram_message_id: integer("telegram_message_id"),          // NULL for manually-added villas
+  telegram_media_group_id: text("telegram_media_group_id"),     // NULL for non-album posts
+  original_caption: text("original_caption"),                   // Raw Telegram caption
+
+  // Extended property attributes extracted from Persian channel posts
+  region: text("region"),                 // e.g. "منطقه فریدونکنار شهرک دریایی"
+  villa_type: text("villa_type"),         // e.g. "دوبلکس", "یک طبقه"
+  facade: text("facade"),                 // e.g. "نمای مدرن", "سنگ و چوب"
+  utilities: text("utilities"),           // comma-separated utility connections
+  location_status: text("location_status"),    // e.g. "کنار دریا", "مشرف به جنگل"
+  community_status: text("community_status"),  // e.g. "داخل شهرک", "خارج شهرک"
+
   created_at: timestamp("created_at", { withTimezone: false }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: false }).defaultNow().notNull(),
-});
+}, (table) => [
+  // Partial unique index: enforces one villa per Telegram message, while
+  // allowing multiple rows with telegram_message_id = NULL (manually-added villas).
+  uniqueIndex("villas_telegram_message_id_unique")
+    .on(table.telegram_message_id)
+    .where(sql`${table.telegram_message_id} IS NOT NULL`),
+]);
 
 export const visitRequestsTable = pgTable("visit_requests", {
   id: serial("id").primaryKey(),

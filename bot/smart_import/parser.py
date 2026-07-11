@@ -12,6 +12,10 @@ collected and appended to VillaData.description.
 
 A single line may carry multiple pieces of info (e.g. bedroom +
 master-bedroom); those are extracted in a single matcher call.
+
+Non-exclusive matchers (boolean features, community/location status,
+utilities) run on every line regardless of whether another matcher
+already claimed it, since one line can carry multiple facts.
 """
 from __future__ import annotations
 
@@ -90,17 +94,65 @@ def _match_city(line: str) -> tuple[str, str] | None:
             return city, area
     return None
 
+def _match_region(line: str) -> str | None:
+    """
+    Lines containing 'منطقه' — return the full line as the region description.
+    e.g. "منطقه: شهرک دریایی" → "منطقه: شهرک دریایی"
+    """
+    if "منطقه" not in line:
+        return None
+    return line.strip()
+
+def _match_villa_type(line: str) -> str | None:
+    """
+    Detect villa structural type.
+    e.g. "ویلا دوبلکس", "یک طبقه", "نوساز", "کلنگی"
+    """
+    stripped = line.strip()
+    villa_types = [
+        "تریبلکس", "دوبلکس",
+        "سه طبقه", "دو طبقه", "یک طبقه",
+        "کلنگی", "نوساز", "بازسازی شده", "ویلایی",
+    ]
+    for vt in villa_types:
+        if vt in stripped:
+            return vt
+    return None
+
+def _match_facade(line: str) -> str | None:
+    """
+    Lines mentioning facade type — contains 'نما' (but not 'ویو' which is 'view').
+    e.g. "نمای مدرن", "نما: سنگ و چوب"
+    """
+    stripped = line.strip()
+    # "نمای" (facade's) and "نما" (facade) but exclude ویو-type lines
+    if "نما" not in stripped:
+        return None
+    if "ویو" in stripped:
+        return None
+    return stripped
+
 def _match_land(line: str) -> float | None:
-    """Lines like '210 زمین', 'زمین 210', 'متراژ زمین 210', or emoji-prefixed '📐 210'."""
+    """
+    Lines like '210 زمین', 'زمین 210', 'متراژ زمین 210', or emoji-prefixed '📐 210'.
+    For combined lines ('زمین 300 بنا 250') the number BEFORE 'بنا' is the land figure.
+    """
     if "زمین" not in line and not line.startswith("📐"):
         return None
-    return _first_float(line)
+    # If 'بنا' is also present, only look at the part up to 'بنا'
+    part = line.split("بنا")[0] if "بنا" in line else line
+    return _first_float(part)
 
 def _match_building(line: str) -> float | None:
-    """Lines like '200 بنا', 'بنا 200', 'زیربنا 200', or emoji-prefixed '🏠 150'."""
+    """
+    Lines like '200 بنا', 'بنا 200', 'زیربنا 200', or emoji-prefixed '🏠 150'.
+    For combined lines ('زمین 300 بنا 250') the number AFTER 'بنا' is the building figure.
+    """
     if "بنا" not in line and not line.startswith("🏠"):
         return None
-    return _first_float(line)
+    # Extract the number from the portion after the last 'بنا'
+    part = line.split("بنا")[-1]
+    return _first_float(part)
 
 def _match_bedrooms(line: str) -> dict | None:
     """
@@ -194,6 +246,73 @@ def _match_bool_features(line: str) -> dict[str, int] | None:
 def _match_display_feature(line: str) -> bool:
     return any(kw in line for kw in _DISPLAY_FEATURE_KEYWORDS)
 
+# ── New non-exclusive matchers ────────────────────────────────────────────────
+
+_LOCATION_STATUS_KEYWORDS = [
+    "کنار دریا", "مشرف به دریا", "رو به دریا", "لب دریا",
+    "کنار جنگل", "مشرف به جنگل", "داخل جنگل",
+    "کنار رودخانه", "کنار تالاب",
+    "کوهستانی", "ییلاقی",
+]
+
+def _match_location_status(line: str) -> str | None:
+    """
+    Detailed geographical position of the villa.
+    Returns the matched keyword phrase, or the part after 'موقعیت:'.
+    """
+    stripped = line.strip()
+
+    # Explicit label: "موقعیت: ساحلی" or "موقعیت ملک: …"
+    if "موقعیت" in stripped:
+        # Extract text after the colon / label
+        for sep in (":", "ملک", "جغرافیایی"):
+            if sep in stripped:
+                after = stripped.split(sep, 1)[-1].strip()
+                if after:
+                    return after
+        # No separator — return the whole line
+        return stripped
+
+    for kw in _LOCATION_STATUS_KEYWORDS:
+        if kw in stripped:
+            return kw
+
+    return None
+
+_COMMUNITY_STATUS_KEYWORDS = [
+    # Negative / non-gated forms MUST come before the generic positive "شهرکی"
+    # to prevent "غیرشهرکی" from being misclassified as "داخل شهرک".
+    ("غیرشهرکی",   "خارج شهرک"),
+    ("غیر شهرکی",  "خارج شهرک"),
+    ("خارج شهرک",   "خارج شهرک"),
+    ("بیرون شهرک",  "خارج شهرک"),
+    ("بدون شهرک",   "خارج شهرک"),
+    ("داخل شهرک",   "داخل شهرک"),
+    ("درون شهرک",   "داخل شهرک"),
+    ("شهرکی",       "داخل شهرک"),   # generic — must stay after negative forms
+    ("خارج بافت",   "خارج از بافت"),
+    ("داخل بافت",   "داخل بافت"),
+]
+
+def _match_community_status(line: str) -> str | None:
+    """Community / gated-community status."""
+    stripped = line.strip()
+    for kw, normalized in _COMMUNITY_STATUS_KEYWORDS:
+        if kw in stripped:
+            return normalized
+    return None
+
+def _match_utility_line(line: str) -> bool:
+    """
+    Infrastructure / utility connection lines.
+    Requires 'انشعاب' OR two of {برق, آب, گاز} to avoid false positives.
+    """
+    if "انشعاب" in line:
+        return True
+    infra = ["برق", "آب", "گاز"]
+    count = sum(1 for kw in infra if kw in line)
+    return count >= 2
+
 # ── Main parse function ───────────────────────────────────────────────────────
 
 def parse_villa_text(text: str) -> VillaData:
@@ -203,6 +322,9 @@ def parse_villa_text(text: str) -> VillaData:
     Lines are processed top-to-bottom; each is tried against the
     matcher priority chain.  Unrecognised lines are appended to
     VillaData.description separated by newlines.
+
+    Non-exclusive matchers (bool features, community/location status,
+    utilities) run on every line and do not prevent other matchers.
 
     This function is pure: no I/O, no DB, no Telegram.
     """
@@ -230,21 +352,42 @@ def parse_villa_text(text: str) -> VillaData:
                 data.city, data.area_type = city_match
                 claimed = True
 
-        # 3. Land area
-        if not claimed and data.land_size is None:
+        # 3. Region (منطقه) — exclusive; only if city didn't claim this line
+        if not claimed and data.region is None:
+            region = _match_region(line)
+            if region:
+                data.region = region
+                claimed = True
+
+        # 4. Villa type — exclusive
+        if not claimed and data.villa_type is None:
+            vt = _match_villa_type(line)
+            if vt:
+                data.villa_type = vt
+                claimed = True
+
+        # 5. Facade — exclusive
+        if not claimed and data.facade is None:
+            fcd = _match_facade(line)
+            if fcd:
+                data.facade = fcd
+                claimed = True
+
+        # 6. Land area (non-exclusive: may share a line with building)
+        if data.land_size is None:
             land = _match_land(line)
             if land is not None:
                 data.land_size = land
                 claimed = True
 
-        # 4. Building area
-        if not claimed and data.building_size is None:
+        # 7. Building area (non-exclusive: may share a line with land)
+        if data.building_size is None:
             bld = _match_building(line)
             if bld is not None:
                 data.building_size = bld
                 claimed = True
 
-        # 5. Bedrooms / master bedrooms
+        # 8. Bedrooms / master bedrooms
         if not claimed:
             rooms = _match_bedrooms(line)
             if rooms:
@@ -254,32 +397,54 @@ def parse_villa_text(text: str) -> VillaData:
                     data.master_bedrooms = rooms["master_bedrooms"]
                 claimed = True
 
-        # 6. Price
+        # 9. Price
         if not claimed and data.price is None:
             price = _match_price(line)
             if price is not None:
                 data.price = price
                 claimed = True
 
-        # 7. Boolean feature flags (has_pool, etc.) — can appear on same line
-        #    as display features, so we check both without mutual exclusion
+        # ── Non-exclusive matchers ─────────────────────────────────────────────
+        # These run on every line (regardless of claimed) because one line can
+        # contain multiple facts.
+
+        # 10. Boolean feature flags (has_pool, etc.)
         bool_flags = _match_bool_features(line)
         if bool_flags:
             for col, val in bool_flags.items():
                 setattr(data, col, val)
             claimed = True
 
-        # 8. Document info
+        # 11. Community status (داخل/خارج شهرک)
+        comm = _match_community_status(line)
+        if comm and data.community_status is None:
+            data.community_status = comm
+            claimed = True
+
+        # 12. Location status (کنار دریا, مشرف به جنگل, …)
+        loc = _match_location_status(line)
+        if loc and data.location_status is None:
+            data.location_status = loc
+            claimed = True
+
+        # 13. Utility connections (انشعاب, برق+آب+گاز)
+        if _match_utility_line(line):
+            data.utilities.append(line.strip())
+            claimed = True
+
+        # ── Exclusive tail matchers ────────────────────────────────────────────
+
+        # 14. Document info
         if not claimed and _match_document(line):
             data.documents.append(line)
             claimed = True
 
-        # 9. Display-only features
+        # 15. Display-only features
         if not claimed and _match_display_feature(line):
             data.features.append(line)
             claimed = True
 
-        # 10. Unknown — collect for description
+        # 16. Unknown — collect for description
         if not claimed:
             unknown_lines.append(line)
 

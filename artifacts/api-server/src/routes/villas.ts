@@ -76,13 +76,16 @@ router.get("/villas", async (req, res) => {
     ...req.query,
     page: req.query.page !== undefined ? Number(req.query.page) : 0,
     page_size: req.query.page_size !== undefined ? Number(req.query.page_size) : DEFAULT_PAGE_SIZE,
+    telegram_message_id: req.query.telegram_message_id !== undefined
+      ? Number(req.query.telegram_message_id)
+      : undefined,
   });
 
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid query params" });
     return;
   }
-  const { status, city, area_type, page, page_size } = parsed.data;
+  const { status, city, area_type, page, page_size, telegram_message_id } = parsed.data;
   const safePage = Math.max(0, page ?? 0);
   const safePageSize = Math.min(Math.max(1, page_size ?? DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
 
@@ -91,6 +94,9 @@ router.get("/villas", async (req, res) => {
     if (status) conditions = sql`${conditions} AND status = ${status}`;
     if (city) conditions = sql`${conditions} AND city = ${city}`;
     if (area_type) conditions = sql`${conditions} AND area_type = ${area_type}`;
+    if (telegram_message_id != null) {
+      conditions = sql`${conditions} AND telegram_message_id = ${telegram_message_id}`;
+    }
 
     const [countResult, rows] = await Promise.all([
       db.execute(sql`SELECT COUNT(*) as cnt FROM villas WHERE ${conditions}`),
@@ -127,7 +133,7 @@ router.post("/villas", async (req, res) => {
       }
     }
 
-    const [created] = await db.insert(villasTable).values({
+    const values = {
       villa_code: villaCode,
       city: data.city ?? null,
       area_type: data.area_type ?? null,
@@ -149,19 +155,78 @@ router.post("/villas", async (req, res) => {
       photos: data.photos ?? null,
       video: data.video ?? null,
       status: data.status ?? "draft",
-    }).returning();
+      // Channel importer provenance
+      telegram_message_id: data.telegram_message_id ?? null,
+      telegram_media_group_id: data.telegram_media_group_id ?? null,
+      original_caption: data.original_caption ?? null,
+      // Extended attributes
+      region: data.region ?? null,
+      villa_type: data.villa_type ?? null,
+      facade: data.facade ?? null,
+      utilities: data.utilities ?? null,
+      location_status: data.location_status ?? null,
+      community_status: data.community_status ?? null,
+    };
+
+    // When telegram_message_id is set, use raw ON CONFLICT ... WHERE ... DO NOTHING
+    // matching the partial unique index, so concurrent importer runs are idempotent.
+    // Drizzle's query-builder onConflictDoNothing() cannot target a partial index
+    // (it omits the WHERE predicate required for Postgres to match it), so we drop
+    // to raw SQL here instead.
+    if (data.telegram_message_id != null) {
+      const inserted = await db.execute(sql`
+        INSERT INTO villas (
+          villa_code, city, area_type, price, land_size, building_size,
+          bedrooms, master_bedrooms, is_townhouse, has_pool, has_jacuzzi,
+          has_roof_garden, has_parking, has_storage, document_type, description,
+          latitude, longitude, photos, video, status,
+          telegram_message_id, telegram_media_group_id, original_caption,
+          region, villa_type, facade, utilities, location_status, community_status
+        ) VALUES (
+          ${values.villa_code}, ${values.city}, ${values.area_type}, ${values.price},
+          ${values.land_size}, ${values.building_size}, ${values.bedrooms},
+          ${values.master_bedrooms}, ${values.is_townhouse}, ${values.has_pool},
+          ${values.has_jacuzzi}, ${values.has_roof_garden}, ${values.has_parking},
+          ${values.has_storage}, ${values.document_type}, ${values.description},
+          ${values.latitude}, ${values.longitude}, ${values.photos}, ${values.video},
+          ${values.status}, ${values.telegram_message_id}, ${values.telegram_media_group_id},
+          ${values.original_caption}, ${values.region}, ${values.villa_type},
+          ${values.facade}, ${values.utilities}, ${values.location_status},
+          ${values.community_status}
+        )
+        ON CONFLICT (telegram_message_id) WHERE telegram_message_id IS NOT NULL
+        DO NOTHING
+        RETURNING *
+      `);
+
+      if (inserted.rows.length > 0) {
+        // Insert succeeded — new villa created.
+        res.status(201).json(inserted.rows[0]);
+      } else {
+        // Conflict: a villa with this telegram_message_id already exists — return it.
+        const existing = await db.execute(
+          sql`SELECT * FROM villas WHERE telegram_message_id = ${data.telegram_message_id} LIMIT 1`
+        );
+        if (existing.rows.length) {
+          res.status(200).json(existing.rows[0]);
+        } else {
+          res.status(409).json({ error: "Duplicate telegram_message_id" });
+        }
+      }
+      return;
+    }
+
+    const [created] = await db.insert(villasTable).values(values).returning();
     res.status(201).json(created);
   } catch (err: unknown) {
-    // PostgreSQL unique-constraint violation (code 23505) — catches the race
-    // where two concurrent requests with the same explicit code both pass the
-    // pre-check above, but only one INSERT succeeds.
+    // PostgreSQL unique-constraint violation on villa_code (code 23505)
     if (
       err !== null &&
       typeof err === "object" &&
       "code" in err &&
       (err as { code: string }).code === "23505"
     ) {
-      res.status(409).json({ error: `Villa code '${villaCode}' already exists` });
+      res.status(409).json({ error: `Villa code already exists` });
       return;
     }
     res.status(500).json({ error: "Internal server error" });
@@ -220,6 +285,17 @@ router.put("/villas/:id", async (req, res) => {
       photos: data.photos ?? null,
       video: data.video ?? null,
       status: data.status ?? "draft",
+      // Channel importer provenance (preserved on update if provided)
+      telegram_message_id: data.telegram_message_id ?? null,
+      telegram_media_group_id: data.telegram_media_group_id ?? null,
+      original_caption: data.original_caption ?? null,
+      // Extended attributes
+      region: data.region ?? null,
+      villa_type: data.villa_type ?? null,
+      facade: data.facade ?? null,
+      utilities: data.utilities ?? null,
+      location_status: data.location_status ?? null,
+      community_status: data.community_status ?? null,
       updated_at: new Date(),
     }).where(eq(villasTable.id, idParsed.data.id)).returning();
     res.json(updated);
