@@ -96,15 +96,14 @@ async def _save_villa(
         data.villa_code, data.city, data.price, len(data.photos),
     )
 
-    # All four fields must be present before we touch the database.
-    # If any is missing the post is incomplete — ignore it silently.
+    # Only city and price are strictly required to save a post — land_size and
+    # building_size are optional and stored as NULL when missing (warned below)
+    # rather than causing the whole post to be discarded.
     missing = [
         name
         for name, val in [
-            ("city",          data.city),
-            ("price",         data.price),
-            ("land_size",     data.land_size),
-            ("building_size", data.building_size),
+            ("city",  data.city),
+            ("price", data.price),
         ]
         if val is None
     ]
@@ -114,6 +113,20 @@ async def _save_villa(
             ", ".join(missing),
         )
         return
+
+    missing_optional = [
+        name
+        for name, val in [
+            ("land_size",     data.land_size),
+            ("building_size", data.building_size),
+        ]
+        if val is None
+    ]
+    if missing_optional:
+        logger.warning(
+            "CHANNEL_IMPORT | saving villa with missing optional fields (will be NULL): %s",
+            ", ".join(missing_optional),
+        )
 
     result = import_villa_from_channel(data)
 
