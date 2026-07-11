@@ -132,27 +132,65 @@ def _match_facade(line: str) -> str | None:
         return None
     return stripped
 
+# Recognised land/building formats (flexible spacing, Persian/English digits):
+#   land:      "220 زمین" | "220 متر زمین" | "زمین 220" | "متراژ زمین 220"
+#   building:  "130 بنا"  | "130 متر بنا"  | "بنا 130"  | "زیربنا 130" | "130 متر زیربنا"
+#
+# "زیربنا" already contains "بنا" as a trailing substring, so a single set of
+# "بنا"-based patterns covers both keyword variants without special-casing.
+#
+# Number-after-keyword is tried first so combined lines like "زمین 300 بنا 250"
+# resolve each figure to the number immediately following its own keyword,
+# rather than falling through to the number-before-keyword fallback.
+
+_LAND_KEYWORD_THEN_NUMBER = re.compile(r"زمین\D{0,10}(\d+(?:\.\d+)?)")
+_NUMBER_THEN_LAND_KEYWORD = re.compile(r"(\d+(?:\.\d+)?)\D{0,10}زمین")
+
+_BUILDING_KEYWORD_THEN_NUMBER = re.compile(r"بنا\D{0,10}(\d+(?:\.\d+)?)")
+_NUMBER_THEN_BUILDING_KEYWORD = re.compile(r"(\d+(?:\.\d+)?)\D{0,10}بنا")
+
+
 def _match_land(line: str) -> float | None:
     """
-    Lines like '210 زمین', 'زمین 210', 'متراژ زمین 210', or emoji-prefixed '📐 210'.
-    For combined lines ('زمین 300 بنا 250') the number BEFORE 'بنا' is the land figure.
+    Lines like '220 زمین', '220 متر زمین', 'زمین 220', 'متراژ زمین 220', or
+    emoji-prefixed '📐 220'. For combined lines ('زمین 300 بنا 250') the number
+    immediately following 'زمین' is the land figure.
     """
-    if "زمین" not in line and not line.startswith("📐"):
+    text = _to_latin(line)
+    if "زمین" not in text and not text.startswith("📐"):
         return None
-    # If 'بنا' is also present, only look at the part up to 'بنا'
-    part = line.split("بنا")[0] if "بنا" in line else line
-    return _first_float(part)
+
+    m = _LAND_KEYWORD_THEN_NUMBER.search(text)
+    if m:
+        return float(m.group(1))
+    m = _NUMBER_THEN_LAND_KEYWORD.search(text)
+    if m:
+        return float(m.group(1))
+    if text.startswith("📐"):
+        return _first_float(text)
+    return None
+
 
 def _match_building(line: str) -> float | None:
     """
-    Lines like '200 بنا', 'بنا 200', 'زیربنا 200', or emoji-prefixed '🏠 150'.
-    For combined lines ('زمین 300 بنا 250') the number AFTER 'بنا' is the building figure.
+    Lines like '130 بنا', '130 متر بنا', 'بنا 130', 'زیربنا 130',
+    '130 متر زیربنا', or emoji-prefixed '🏠 130'. For combined lines
+    ('زمین 300 بنا 250') the number immediately following 'بنا' (or
+    'زیربنا', which contains 'بنا') is the building figure.
     """
-    if "بنا" not in line and not line.startswith("🏠"):
+    text = _to_latin(line)
+    if "بنا" not in text and not text.startswith("🏠"):
         return None
-    # Extract the number from the portion after the last 'بنا'
-    part = line.split("بنا")[-1]
-    return _first_float(part)
+
+    m = _BUILDING_KEYWORD_THEN_NUMBER.search(text)
+    if m:
+        return float(m.group(1))
+    m = _NUMBER_THEN_BUILDING_KEYWORD.search(text)
+    if m:
+        return float(m.group(1))
+    if text.startswith("🏠"):
+        return _first_float(text)
+    return None
 
 def _match_bedrooms(line: str) -> dict | None:
     """
