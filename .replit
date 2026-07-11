@@ -55,13 +55,13 @@ outputType = "console"
 name = "Start application"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd artifacts/admin-panel && PORT=5000 BASE_PATH=/ pnpm run dev"
 waitForPort = 5000
-
-[workflows.workflow.metadata]
-outputType = "webview"
 
 [agent]
 stack = "BEST_EFFORT_FALLBACK"
@@ -99,3 +99,4 @@ externalPort = 3001
 [userenv.shared]
 ADMIN_ID = "75515550"
 CHANNEL_ID = "-1004187733480"
+TELEGRAM_BOT_TOKEN = "8951313123:AAE0CfcN4C554Ss-zAAMlPfVDq1gM8sNQsE"
