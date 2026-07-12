@@ -11,10 +11,18 @@ upserts by telegram_message_id (the Bot API message_id of the post that
 carries the caption/text). Re-processing the same post — e.g. after a bot
 restart mid-album-buffer, or when the admin edits a channel post — updates
 the existing villa instead of creating a duplicate.
+
+Posting styles supported
+------------------------
+Style A (existing): media group where one message carries a caption.
+Style B (new):      media group with NO caption, followed within 60 seconds
+                    by a plain text-only message from the same channel.  The
+                    text message is treated as the description for that album.
 """
 
 import asyncio
 import logging
+import time
 
 from telegram import Update, Bot, Message
 from telegram.ext import ContextTypes, MessageHandler, filters
@@ -40,7 +48,7 @@ def _extract_text(post: Message) -> str:
     return (post.caption or post.text or "").strip()
 
 
-# ── Media group buffer ─────────────────────────────────────────────────────────
+# ── Media group buffer (Style A) ───────────────────────────────────────────────
 # Keyed by media_group_id.  Collects caption + all photo file_ids + message ids
 # until the group is complete (detected by a short quiet-period timeout).
 
@@ -48,19 +56,84 @@ _buffer: dict[str, dict] = {}
 _TIMEOUT = 2.5  # seconds to wait after the last photo in the group arrives
 
 
-async def _flush_group(group_id: str, bot: Bot) -> None:
+# ── Pending-caption buffer (Style B) ──────────────────────────────────────────
+# Keyed by chat_id.  Stores caption-less media groups waiting for a follow-up
+# text message.  Entry expires after _CAPTION_WAIT seconds.
+
+_pending_caption: dict[int, dict] = {}
+_CAPTION_WAIT = 60  # seconds to wait for a follow-up text message
+
+
+async def _flush_group(group_id: str, bot: Bot, chat_id: int) -> None:
     """Called after the timeout; processes the buffered media group."""
     await asyncio.sleep(_TIMEOUT)
     entry = _buffer.pop(group_id, None)
     if entry is None:
         return
-    await _save_villa(
-        bot,
-        text=entry.get("caption", ""),
-        photo_ids=entry.get("photo_ids", []),
-        message_id=entry["message_id"],
-        media_group_id=group_id,
+
+    caption = entry.get("caption", "")
+
+    if caption:
+        # Style A: caption present — import immediately as before.
+        await _save_villa(
+            bot,
+            text=caption,
+            photo_ids=entry.get("photo_ids", []),
+            message_id=entry["message_id"],
+            media_group_id=group_id,
+        )
+    else:
+        # Style B: no caption — park the album and wait up to 60 s for a
+        # follow-up text message from the same channel.
+        _pending_caption[chat_id] = {
+            "group_id":  group_id,
+            "photo_ids": entry.get("photo_ids", []),
+            "message_id": entry["message_id"],
+            "expires_at": time.monotonic() + _CAPTION_WAIT,
+        }
+        logger.debug(
+            "CHANNEL_IMPORT | media group %s has no caption — waiting up to %ds "
+            "for a follow-up text message (chat_id=%s, msg_id=%s)",
+            group_id, _CAPTION_WAIT, chat_id, entry["message_id"],
+        )
+        # Schedule expiry cleanup so stale entries don't linger forever.
+        asyncio.create_task(_expire_pending(chat_id, bot, entry["message_id"]))
+
+
+async def _expire_pending(chat_id: int, bot: Bot, message_id: int) -> None:
+    """After the wait window, discard any unfulfilled pending-caption entry and notify admin."""
+    await asyncio.sleep(_CAPTION_WAIT + 1)
+    entry = _pending_caption.pop(chat_id, None)
+    if entry is None:
+        # Already consumed by a follow-up text — nothing to do.
+        return
+
+    reason = "آلبوم بدون کپشن — پیام متنی دنباله‌دار در ۶۰ ثانیه دریافت نشد"
+    logger.warning(
+        "CHANNEL_IMPORT | IGNORED (Style-B timeout) msg_id=%s group=%s — %s",
+        message_id, entry.get("group_id"), reason,
     )
+    await _notify_failure(bot, message_id, reason)
+
+
+# ── Admin notification helpers ─────────────────────────────────────────────────
+
+async def _notify_failure(bot: Bot, message_id: int, reason: str) -> None:
+    """Send admin a structured failure notification and write it to the log."""
+    logger.error(
+        "CHANNEL_IMPORT | FAILED msg_id=%s — %s",
+        message_id, reason,
+    )
+    try:
+        await bot.send_message(
+            ADMIN_ID,
+            f"❌ <b>خطا در ایمپورت ویلا</b>\n\n"
+            f"🆔 شناسه پیام: <code>{message_id}</code>\n"
+            f"📋 دلیل: {reason}",
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        logger.exception("CHANNEL_IMPORT | could not send failure notification: %s", exc)
 
 
 # ── Core save logic ────────────────────────────────────────────────────────────
@@ -82,7 +155,9 @@ async def _save_villa(
     )
 
     if not text:
-        logger.warning("CHANNEL_IMPORT | empty text — ignoring update")
+        reason = "متن خالی — هیچ کپشن یا متنی در پیام یافت نشد"
+        logger.warning("CHANNEL_IMPORT | IGNORED msg_id=%s — %s", message_id, reason)
+        await _notify_failure(bot, message_id, reason)
         return
 
     data = parse_villa_text(text)
@@ -96,10 +171,11 @@ async def _save_villa(
         data.villa_code, data.city, data.price, len(data.photos),
     )
 
+    # ── Required-field validation ──────────────────────────────────────────────
     # Only city and price are strictly required to save a post — land_size and
     # building_size are optional and stored as NULL when missing (warned below)
     # rather than causing the whole post to be discarded.
-    missing = [
+    missing_required = [
         name
         for name, val in [
             ("city",  data.city),
@@ -107,13 +183,21 @@ async def _save_villa(
         ]
         if val is None
     ]
-    if missing:
+    if missing_required:
+        field_labels = {
+            "city":  "شهر (city)",
+            "price": "قیمت (price)",
+        }
+        missing_fa = " و ".join(field_labels[f] for f in missing_required)
+        reason = f"فیلدهای ضروری یافت نشد: {missing_fa}"
         logger.info(
-            "CHANNEL_IMPORT | IGNORED — missing required fields: %s",
-            ", ".join(missing),
+            "CHANNEL_IMPORT | IGNORED msg_id=%s — %s | text=%r",
+            message_id, reason, text[:200],
         )
+        await _notify_failure(bot, message_id, reason)
         return
 
+    # ── Optional-field warnings ────────────────────────────────────────────────
     missing_optional = [
         name
         for name, val in [
@@ -124,10 +208,12 @@ async def _save_villa(
     ]
     if missing_optional:
         logger.warning(
-            "CHANNEL_IMPORT | saving villa with missing optional fields (will be NULL): %s",
-            ", ".join(missing_optional),
+            "CHANNEL_IMPORT | msg_id=%s — saving villa with missing optional fields "
+            "(will be NULL): %s",
+            message_id, ", ".join(missing_optional),
         )
 
+    # ── Persist ────────────────────────────────────────────────────────────────
     result = import_villa_from_channel(data)
 
     if result.success:
@@ -147,11 +233,18 @@ async def _save_villa(
             result.mode, result.villa_code, result.villa_id, message_id, len(photo_ids),
         )
     else:
+        reason = result.error or "خطای ناشناخته در ذخیره‌سازی"
+        logger.error(
+            "CHANNEL_IMPORT | FAILED msg_id=%s — API error: %s",
+            message_id, reason,
+        )
         await bot.send_message(
             ADMIN_ID,
-            f"❌ خطا در ذخیره ویلا از کانال:\n{result.error}",
+            f"❌ <b>خطا در ذخیره ویلا از کانال</b>\n\n"
+            f"🆔 شناسه پیام: <code>{message_id}</code>\n"
+            f"📋 دلیل: {reason}",
+            parse_mode="HTML",
         )
-        logger.error("CHANNEL_IMPORT | save failed: %s", result.error)
 
 
 # ── PTB handler ────────────────────────────────────────────────────────────────
@@ -172,10 +265,38 @@ async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE
     if CHANNEL_ID and post.chat.id != CHANNEL_ID:
         return
 
+    chat_id = post.chat.id
+
     # ── Case 1: plain text post (no photos) ───────────────────────────────────
     if not post.photo:
         text = _extract_text(post)
-        if text:
+        if not text:
+            return
+
+        # Style B: check whether a caption-less album is waiting for this text.
+        pending = _pending_caption.get(chat_id)
+        if pending and time.monotonic() < pending["expires_at"]:
+            # Consume the pending entry and import as a captioned album.
+            del _pending_caption[chat_id]
+            logger.debug(
+                "CHANNEL_IMPORT | Style-B match — using text msg_id=%s as caption "
+                "for album msg_id=%s group=%s",
+                post.message_id, pending["message_id"], pending["group_id"],
+            )
+            await _save_villa(
+                context.bot,
+                text=text,
+                photo_ids=pending["photo_ids"],
+                message_id=pending["message_id"],
+                media_group_id=pending["group_id"],
+            )
+        else:
+            # No pending album (or it expired) — treat as a standalone text post.
+            if pending:
+                # Expired entry — clean it up silently (the expiry task will
+                # have already sent the notification once it wakes up, so we
+                # just remove the stale dict entry here).
+                del _pending_caption[chat_id]
             await _save_villa(
                 context.bot, text, [],
                 message_id=post.message_id, media_group_id=None,
@@ -203,9 +324,9 @@ async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if gid not in _buffer:
         _buffer[gid] = {
-            "caption": text,
-            "photo_ids": [],
-            "task": None,
+            "caption":    text,
+            "photo_ids":  [],
+            "task":       None,
             "message_id": post.message_id,
         }
     else:
@@ -222,7 +343,7 @@ async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE
     if old_task and not old_task.done():
         old_task.cancel()
     _buffer[gid]["task"] = asyncio.create_task(
-        _flush_group(gid, context.bot)
+        _flush_group(gid, context.bot, chat_id)
     )
 
 
