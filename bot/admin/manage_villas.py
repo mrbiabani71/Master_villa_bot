@@ -279,8 +279,11 @@ async def cb_mv_page(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 # ── MV_SEARCH: villa selected → show summary card ─────────────────────────────
 
-def _card_keyboard(villa_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
+_REPUBLISHABLE = {"inactive", "draft"}
+
+
+def _card_keyboard(villa_id: int, status: str | None = None) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = [
         [
             InlineKeyboardButton("✏️ ویرایش",       callback_data=f"mv_edit_{villa_id}"),
             InlineKeyboardButton("📋 جزئیات کامل",  callback_data=f"mv_details_{villa_id}"),
@@ -289,8 +292,13 @@ def _card_keyboard(villa_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton("🚫 غیرفعال کردن", callback_data=f"mv_deact_{villa_id}"),
             InlineKeyboardButton("🗑 حذف",           callback_data=f"mv_del_{villa_id}"),
         ],
-        [InlineKeyboardButton("⬅️ بازگشت به نتایج", callback_data="mv_back_results")],
-    ])
+    ]
+    if status in _REPUBLISHABLE:
+        rows.append([
+            InlineKeyboardButton("♻️ بازنشر", callback_data=f"mv_repost_ask_{villa_id}"),
+        ])
+    rows.append([InlineKeyboardButton("⬅️ بازگشت به نتایج", callback_data="mv_back_results")])
+    return InlineKeyboardMarkup(rows)
 
 
 def _build_card(v: dict, photos: list[str]) -> str:
@@ -322,7 +330,7 @@ async def cb_mv_select(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     await query.edit_message_text(
         _build_card(villa, photos),
         parse_mode="Markdown",
-        reply_markup=_card_keyboard(villa_id),
+        reply_markup=_card_keyboard(villa_id, villa.get("status")),
     )
     return MV_SEARCH
 
@@ -556,11 +564,112 @@ async def cb_mv_cancel_delete(update: Update, context: ContextTypes.DEFAULT_TYPE
         await query.edit_message_text(
             _build_card(villa, photos) if villa else "⚠️ ویلا یافت نشد.",
             parse_mode="Markdown",
-            reply_markup=_card_keyboard(villa_id) if villa else None,
+            reply_markup=_card_keyboard(villa_id, villa.get("status")) if villa else None,
         )
     else:
         await query.edit_message_text("حذف لغو شد.")
 
+    return MV_SEARCH
+
+
+# ── MV_SEARCH: ♻️ Republish — ask confirmation ────────────────────────────────
+
+async def cb_mv_repost_ask(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    villa_id = int(query.data.removeprefix("mv_repost_ask_"))
+    villa    = get_villa_by_id(villa_id)
+    code     = (villa or {}).get("villa_code") or str(villa_id)
+    status   = (villa or {}).get("status") or "—"
+
+    if status not in _REPUBLISHABLE:
+        await query.answer(
+            f"وضعیت فعلی «{_status_fa(status)}» قابل بازنشر نیست.",
+            show_alert=True,
+        )
+        return MV_SEARCH
+
+    await query.edit_message_text(
+        f"♻️ *تأیید بازنشر ویلا*\n\n"
+        f"🏷 کد: *{code}*\n"
+        f"📊 وضعیت فعلی: {_status_fa(status)}\n\n"
+        f"وضعیت به *منتشر* تغییر می‌کند و ویلا در نتایج جستجوی مشتریان نمایش داده خواهد شد.\n\n"
+        "آیا مطمئن هستید؟",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ بله، بازنشر شود",  callback_data=f"mv_repost_confirm_{villa_id}"),
+                InlineKeyboardButton("❌ انصراف",            callback_data=f"mv_repost_cancel_{villa_id}"),
+            ],
+        ]),
+    )
+    return MV_SEARCH
+
+
+# ── MV_SEARCH: ♻️ Republish — confirmed ──────────────────────────────────────
+
+async def cb_mv_repost_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    villa_id = int(query.data.removeprefix("mv_repost_confirm_"))
+    villa    = get_villa_by_id(villa_id)
+    code     = (villa or {}).get("villa_code") or str(villa_id)
+    old_status = (villa or {}).get("status") or "—"
+
+    if old_status not in _REPUBLISHABLE:
+        await query.answer(
+            f"وضعیت «{_status_fa(old_status)}» قابل بازنشر نیست.",
+            show_alert=True,
+        )
+        return MV_SEARCH
+
+    ok = set_villa_status(villa_id, "published")
+    if ok:
+        logger.info(
+            "manage_villas | republished villa_id=%s code=%s  %s → published",
+            villa_id, code, old_status,
+        )
+        await query.edit_message_text(
+            f"♻️ *ویلا بازنشر شد*\n\n"
+            f"🏷 کد: {code}\n"
+            f"📊 وضعیت: {_status_fa(old_status)} ← *منتشر ✅*\n\n"
+            "این ویلا اکنون در نتایج جستجوی مشتریان نمایش داده می‌شود.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("⬅️ بازگشت به نتایج", callback_data="mv_back_results")],
+            ]),
+        )
+    else:
+        await query.edit_message_text(
+            "❌ خطا در بازنشر ویلا. لطفاً دوباره تلاش کنید.",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("🔄 تلاش مجدد",  callback_data=f"mv_repost_confirm_{villa_id}"),
+                    InlineKeyboardButton("❌ انصراف",       callback_data=f"mv_repost_cancel_{villa_id}"),
+                ],
+            ]),
+        )
+
+    return MV_SEARCH
+
+
+# ── MV_SEARCH: ♻️ Republish — cancelled ──────────────────────────────────────
+
+async def cb_mv_repost_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    villa_id = int(query.data.removeprefix("mv_repost_cancel_"))
+    villa    = get_villa_by_id(villa_id)
+    photos   = [p.strip() for p in (villa or {}).get("photos", "").split(",") if p.strip()]
+
+    await query.edit_message_text(
+        _build_card(villa, photos) if villa else "⚠️ ویلا یافت نشد.",
+        parse_mode="Markdown",
+        reply_markup=_card_keyboard(villa_id, (villa or {}).get("status")) if villa else None,
+    )
     return MV_SEARCH
 
 
@@ -591,8 +700,11 @@ def build_manage_villas_conv() -> ConversationHandler:
                 # Inline callbacks — card actions
                 CallbackQueryHandler(cb_mv_edit,       pattern=r"^mv_edit_\d+$"),
                 CallbackQueryHandler(cb_mv_details,    pattern=r"^mv_details_\d+$"),
-                CallbackQueryHandler(cb_mv_deactivate, pattern=r"^mv_deact_\d+$"),
-                CallbackQueryHandler(cb_mv_delete_ask, pattern=r"^mv_del_\d+$"),
+                CallbackQueryHandler(cb_mv_deactivate,   pattern=r"^mv_deact_\d+$"),
+                CallbackQueryHandler(cb_mv_delete_ask,   pattern=r"^mv_del_\d+$"),
+                CallbackQueryHandler(cb_mv_repost_ask,    pattern=r"^mv_repost_ask_\d+$"),
+                CallbackQueryHandler(cb_mv_repost_confirm,pattern=r"^mv_repost_confirm_\d+$"),
+                CallbackQueryHandler(cb_mv_repost_cancel, pattern=r"^mv_repost_cancel_\d+$"),
                 # Text input (search type + value)
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_search_text),
             ],
