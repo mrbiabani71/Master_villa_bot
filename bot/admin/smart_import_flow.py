@@ -138,6 +138,76 @@ def _is_admin(update: Update) -> bool:
     return update.effective_user.id == ADMIN_ID
 
 
+# ── Entry from failed channel import ──────────────────────────────────────────
+
+async def enter_from_failed_import(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """
+    Callback entry point: admin pressed ✏️ ویرایش on a failed import item.
+
+    Reads the stored group data from context.user_data["ch_failed_groups"][i],
+    parses the raw text, pre-seeds si_data + si_photos, and drops straight
+    into SI_PREVIEW — no need to re-enter the text.
+    """
+    query = update.callback_query
+    await query.answer()
+
+    if not _is_admin(update):
+        return ConversationHandler.END
+
+    # ch_edit_fail_noop is a display-only button (more than 5 failures)
+    if query.data == "ch_edit_fail_noop":
+        await query.answer("موارد اضافی در لاگ‌های ربات قابل مشاهده هستند.", show_alert=True)
+        return ConversationHandler.END
+
+    idx = int(query.data.removeprefix("ch_edit_fail_"))
+    failed_groups: list[dict] = context.user_data.get("ch_failed_groups", [])
+
+    if idx >= len(failed_groups):
+        await query.answer("اطلاعات این مورد دیگر در دسترس نیست.", show_alert=True)
+        return ConversationHandler.END
+
+    item = failed_groups[idx]
+    raw_text = item.get("text") or ""
+    msg_id   = item.get("msg_id", "—")
+    error    = (item.get("error") or "خطای ناشناخته")
+
+    logger.info(
+        "smart_import | enter_from_failed_import: idx=%d msg_id=%s",
+        idx, msg_id,
+    )
+
+    # Parse raw text and attach Telegram provenance
+    data = parse_villa_text(raw_text)
+    data.photos                  = list(item.get("photos", []))
+    data.telegram_message_id     = item.get("msg_id")
+    data.telegram_media_group_id = item.get("media_group_id")
+    data.original_caption        = item.get("original_caption") or raw_text
+
+    # Pre-seed the conversation state
+    context.user_data.pop("si_edit_field", None)
+    context.user_data["si_data"]   = data
+    context.user_data["si_photos"] = list(item.get("photos", []))
+
+    # Send a NEW message so the summary stays visible for reference.
+    # The SI_PREVIEW callbacks (si_confirm / si_edit / si_cancel) all use
+    # query.edit_message_text, which will target this new preview message.
+    error_snippet = error[:100]
+    preview_header = (
+        f"✏️ *ویرایش ویلای ناموفق*\n"
+        f"🆔 پیام: `{msg_id}`\n"
+        f"⚠️ دلیل خطا: {error_snippet}\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+    )
+
+    await context.bot.send_message(
+        update.effective_user.id,
+        preview_header + _build_preview(data),
+        parse_mode="Markdown",
+        reply_markup=_preview_keyboard(),
+    )
+    return SI_PREVIEW
+
+
 # ── Step 1: entry ─────────────────────────────────────────────────────────────
 
 async def start_smart_import(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -475,6 +545,7 @@ def build_smart_import_conv() -> ConversationHandler:
     return ConversationHandler(
         entry_points=[
             MessageHandler(filters.Regex("^➕ ثبت ویلا$"), start_smart_import),
+            CallbackQueryHandler(enter_from_failed_import, pattern=r"^ch_edit_fail_"),
         ],
         states={
             SI_WAITING_TEXT: [

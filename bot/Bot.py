@@ -181,6 +181,8 @@ app.add_handler(CallbackQueryHandler(cb_req_delete,  pattern="^req_del_"))
 # ── Inline callbacks: channel import panel ────────────────────────────────────
 app.add_handler(CallbackQueryHandler(cb_import_confirm, pattern="^ch_import_confirm$"))
 app.add_handler(CallbackQueryHandler(cb_import_cancel,  pattern="^ch_import_cancel$"))
+# Note: ch_edit_fail_* is handled as a ConversationHandler entry point in
+# build_smart_import_conv() — no separate registration needed here.
 
 # ── Channel import (must be before general message handler) ───────────────────
 app.add_handler(channel_import_handler())

@@ -151,7 +151,7 @@ async def cb_import_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     try:
         loop = asyncio.get_running_loop()
-        results = await loop.run_in_executor(None, _sync_import, groups)
+        results, failed_items_raw = await loop.run_in_executor(None, _sync_import, groups)
     except Exception as exc:
         logger.exception("channel_import_panel | import pipeline failed: %s", exc)
         await query.edit_message_text(
@@ -163,24 +163,28 @@ async def cb_import_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     # ── Phase 3: summary ───────────────────────────────────────────────────────
     created = sum(1 for r in results if r.success and r.mode == "create")
     updated = sum(1 for r in results if r.success and r.mode == "update")
-    failed  = [r for r in results if not r.success]
     skipped = len(groups) - len(results)
+
+    # Persist failed group data so Edit buttons can open the Smart Import flow.
+    context.user_data["ch_failed_groups"] = failed_items_raw
 
     logger.info(
         "channel_import_panel | complete: msgs=%d groups=%d "
         "created=%d updated=%d failed=%d skipped=%d",
-        total_msgs, len(groups), created, updated, len(failed), skipped,
+        total_msgs, len(groups), created, updated, len(failed_items_raw), skipped,
     )
 
+    # ── Build summary text ────────────────────────────────────────────────────
     fail_section = ""
-    if failed:
-        items = "\n".join(
-            f"  • {r.villa_code or '—'}: {r.error or 'خطای ناشناخته'}"
-            for r in failed[:10]
-        )
-        if len(failed) > 10:
-            items += f"\n  … و {len(failed) - 10} مورد دیگر"
-        fail_section = f"\n\n❌ *جزئیات خطاها:*\n{items}"
+    if failed_items_raw:
+        lines = []
+        for item in failed_items_raw[:10]:
+            mid = item.get("msg_id", "—")
+            err = (item.get("error") or "خطای ناشناخته")[:90]
+            lines.append(f"  • 🆔 `{mid}` — {err}")
+        if len(failed_items_raw) > 10:
+            lines.append(f"  … و {len(failed_items_raw) - 10} مورد دیگر")
+        fail_section = "\n\n❌ *جزئیات خطاها:*\n" + "\n".join(lines)
 
     summary = (
         "📊 *خلاصه ایمپورت کانال*\n\n"
@@ -189,27 +193,53 @@ async def cb_import_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         f"⏭ رد‌شده (بدون متن): *{skipped}*\n\n"
         f"✅ ویلاهای جدید: *{created}*\n"
         f"🔄 ویلاهای به‌روزشده: *{updated}*\n"
-        f"❌ خطا: *{len(failed)}*"
+        f"❌ خطا: *{len(failed_items_raw)}*"
         f"{fail_section}"
     )
 
-    await query.edit_message_text(summary, parse_mode="Markdown")
+    # ── Build ✏️ Edit keyboard (one button per failed item, up to 5) ──────────
+    kb_rows: list[list[InlineKeyboardButton]] = []
+    for i, item in enumerate(failed_items_raw[:5]):
+        mid = item.get("msg_id", "—")
+        kb_rows.append([
+            InlineKeyboardButton(
+                f"✏️ ویرایش پیام {mid}",
+                callback_data=f"ch_edit_fail_{i}",
+            )
+        ])
+    if len(failed_items_raw) > 5:
+        kb_rows.append([
+            InlineKeyboardButton(
+                f"⚠️ {len(failed_items_raw) - 5} مورد دیگر — بررسی لاگ‌ها",
+                callback_data="ch_edit_fail_noop",
+            )
+        ])
+
+    reply_markup = InlineKeyboardMarkup(kb_rows) if kb_rows else None
+    await query.edit_message_text(summary, parse_mode="Markdown", reply_markup=reply_markup)
 
 
 # ── Sync import helper (runs in executor thread) ───────────────────────────────
 
-def _sync_import(groups) -> list:
+def _sync_import(groups) -> tuple[list, list[dict]]:
     """
     Run the parse → upsert pipeline synchronously.
 
-    Mirrors channel_history/importer.import_villa_groups but without async
-    overhead, so it can be safely called from run_in_executor without
-    nesting event loops.
+    Returns
+    -------
+    results : list[ImportResult]
+        One entry per processed group (text-less groups are skipped).
+    failed_raw : list[dict]
+        One entry per failed result with the raw group data needed to
+        re-open the Smart Import editor:
+            msg_id, text, photos, media_group_id, original_caption, error
     """
     from smart_import.parser import parse_villa_text
     from smart_import.importer import import_villa_from_channel
 
-    results = []
+    results: list = []
+    failed_raw: list[dict] = []
+
     for idx, group in enumerate(groups):
         if not group.text:
             logger.debug(
@@ -240,7 +270,15 @@ def _sync_import(groups) -> list:
                 "channel_import_panel | group %d (msg_id=%d): FAILED — %s",
                 idx, group.telegram_message_id, result.error,
             )
+            failed_raw.append({
+                "msg_id":           group.telegram_message_id,
+                "text":             group.text,
+                "photos":           list(group.photo_file_ids),
+                "media_group_id":   group.telegram_media_group_id,
+                "original_caption": group.original_caption,
+                "error":            result.error or "خطای ناشناخته",
+            })
 
         results.append(result)
 
-    return results
+    return results, failed_raw
