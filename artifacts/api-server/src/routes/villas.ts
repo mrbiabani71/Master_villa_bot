@@ -36,35 +36,68 @@ async function getNextVillaCode(): Promise<string> {
 
 router.get("/villas/stats", async (_req, res) => {
   try {
-    const [total, published, draft, sold, archived, byCity, priceRows] = await Promise.all([
+    const [
+      total, published, inactive, draft, sold, archived,
+      byCity, byAreaType, priceRows, latestImport,
+    ] = await Promise.all([
       db.execute(sql`SELECT COUNT(*) as cnt FROM villas`),
       db.execute(sql`SELECT COUNT(*) as cnt FROM villas WHERE status = 'published'`),
+      db.execute(sql`SELECT COUNT(*) as cnt FROM villas WHERE status = 'inactive'`),
       db.execute(sql`SELECT COUNT(*) as cnt FROM villas WHERE status = 'draft'`),
       db.execute(sql`SELECT COUNT(*) as cnt FROM villas WHERE status = 'sold'`),
       db.execute(sql`SELECT COUNT(*) as cnt FROM villas WHERE status = 'archived'`),
-      db.execute(sql`SELECT city, COUNT(*) as count FROM villas WHERE city IS NOT NULL AND status != 'archived' GROUP BY city ORDER BY count DESC`),
-      db.execute(sql`SELECT price FROM villas WHERE price IS NOT NULL AND status != 'archived'`),
+      db.execute(sql`
+        SELECT city, COUNT(*) as count
+        FROM villas
+        WHERE city IS NOT NULL AND status NOT IN ('archived','inactive')
+        GROUP BY city ORDER BY count DESC
+      `),
+      db.execute(sql`
+        SELECT area_type, COUNT(*) as count
+        FROM villas
+        WHERE area_type IS NOT NULL AND status NOT IN ('archived','inactive')
+        GROUP BY area_type ORDER BY count DESC
+      `),
+      db.execute(sql`
+        SELECT price FROM villas
+        WHERE price IS NOT NULL AND status NOT IN ('archived','inactive')
+      `),
+      db.execute(sql`
+        SELECT MAX(created_at) as latest
+        FROM villas
+        WHERE telegram_message_id IS NOT NULL
+      `),
     ]);
 
-    const tiers: Record<string, number> = { اقتصادی: 0, متوسط: 0, "نیمه لوکس": 0, لوکس: 0 };
+    const tiers: Record<string, number> = {
+      "زیر ۵ میلیارد": 0,
+      "۵ تا ۷ میلیارد": 0,
+      "۷ تا ۱۰ میلیارد": 0,
+      "۱۰ تا ۱۵ میلیارد": 0,
+      "بالای ۱۵ میلیارد": 0,
+    };
     for (const row of priceRows.rows as { price: number }[]) {
       const p = row.price;
-      if (p < 7_000_000_000) tiers["اقتصادی"]++;
-      else if (p < 10_000_000_000) tiers["متوسط"]++;
-      else if (p < 15_000_000_000) tiers["نیمه لوکس"]++;
-      else tiers["لوکس"]++;
+      if (p < 5_000_000_000)       tiers["زیر ۵ میلیارد"]++;
+      else if (p < 7_000_000_000)  tiers["۵ تا ۷ میلیارد"]++;
+      else if (p < 10_000_000_000) tiers["۷ تا ۱۰ میلیارد"]++;
+      else if (p < 15_000_000_000) tiers["۱۰ تا ۱۵ میلیارد"]++;
+      else                         tiers["بالای ۱۵ میلیارد"]++;
     }
 
     const by_price_tier = Object.entries(tiers).map(([tier, count]) => ({ tier, count }));
 
     res.json({
-      total: Number((total.rows[0] as { cnt: string }).cnt),
-      published: Number((published.rows[0] as { cnt: string }).cnt),
-      draft: Number((draft.rows[0] as { cnt: string }).cnt),
-      sold: Number((sold.rows[0] as { cnt: string }).cnt),
-      archived: Number((archived.rows[0] as { cnt: string }).cnt),
-      by_city: byCity.rows,
+      total:    Number((total.rows[0]    as { cnt: string }).cnt),
+      published:Number((published.rows[0] as { cnt: string }).cnt),
+      inactive: Number((inactive.rows[0]  as { cnt: string }).cnt),
+      draft:    Number((draft.rows[0]    as { cnt: string }).cnt),
+      sold:     Number((sold.rows[0]     as { cnt: string }).cnt),
+      archived: Number((archived.rows[0]  as { cnt: string }).cnt),
+      by_city:      byCity.rows,
+      by_area_type: byAreaType.rows,
       by_price_tier,
+      latest_import: (latestImport.rows[0] as { latest: string | null }).latest ?? null,
     });
   } catch (err) {
     res.status(500).json({ error: "Internal server error" });

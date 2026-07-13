@@ -36,6 +36,11 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
             )
         return
 
+    if text == "📊 آمار":
+        from admin.stats import handle_stats_button
+        await handle_stats_button(update, context)
+        return
+
     if text == "📋 درخواست‌ها":
         from admin.requests import handle_requests_button
         await handle_requests_button(update, context)
