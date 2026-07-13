@@ -8,6 +8,7 @@
 
 export * from './createVillaRequest';
 export * from './errorResponse';
+export * from './hardDeleteVilla200';
 export * from './healthStatus';
 export * from './listRequestsParams';
 export * from './listRequestsRequestType';

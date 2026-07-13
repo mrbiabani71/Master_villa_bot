@@ -14,4 +14,5 @@ export const VillaStatus = {
   published: 'published',
   sold: 'sold',
   archived: 'archived',
+  inactive: 'inactive',
 } as const;

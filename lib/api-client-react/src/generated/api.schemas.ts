@@ -21,6 +21,7 @@ export const VillaStatus = {
   published: 'published',
   sold: 'sold',
   archived: 'archived',
+  inactive: 'inactive',
 } as const;
 
 export interface Villa {
@@ -51,6 +52,8 @@ export interface Villa {
 }
 
 export interface CreateVillaRequest {
+  /** Optional MV code (e.g. "MV-1042"). When provided the server uses it as-is and skips auto-generation. When omitted the server assigns the next available code automatically. */
+  villa_code?: string | null;
   city?: string | null;
   area_type?: string | null;
   price?: number | null;
@@ -162,6 +165,11 @@ city?: string;
 area_type?: string;
 page?: number;
 page_size?: number;
+};
+
+export type HardDeleteVilla200 = {
+  deleted?: boolean;
+  id?: number;
 };
 
 export type ListRequestsParams = {

@@ -213,6 +213,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /villas/{id}/hard:
+    delete:
+      operationId: hardDeleteVilla
+      tags: [villas]
+      summary: Permanently delete a villa record from the database
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                  id:
+                    type: integer
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /requests:
     get:
       operationId: listRequests
@@ -320,7 +350,7 @@ components:
 
     VillaStatus:
       type: string
-      enum: [draft, published, sold, archived]
+      enum: [draft, published, sold, archived, inactive]
 
     Villa:
       type: object

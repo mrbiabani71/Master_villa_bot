@@ -327,6 +327,21 @@ router.patch("/villas/:id", async (req, res) => {
   }
 });
 
+router.delete("/villas/:id/hard", async (req, res) => {
+  const parsed = ArchiveVillaParams.safeParse({ id: Number(req.params.id) });
+  if (!parsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  try {
+    const existing = await db.select().from(villasTable).where(eq(villasTable.id, parsed.data.id));
+    if (!existing.length) { res.status(404).json({ error: "Villa not found" }); return; }
+
+    await db.delete(villasTable).where(eq(villasTable.id, parsed.data.id));
+    res.json({ deleted: true, id: parsed.data.id });
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.delete("/villas/:id", async (req, res) => {
   const parsed = ArchiveVillaParams.safeParse({ id: Number(req.params.id) });
   if (!parsed.success) { res.status(400).json({ error: "Invalid id" }); return; }

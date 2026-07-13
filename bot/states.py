@@ -12,3 +12,6 @@ SI_WAITING_TEXT, SI_PREVIEW, SI_EDIT_FIELD, SI_EDIT_VALUE, SI_PHOTOS = range(24,
 
 # ── Admin: Edit Villa states ─────────────────────────────────────────────────────
 EV_WAITING_CODE, EV_PREVIEW, EV_EDIT_FIELD, EV_EDIT_VALUE, EV_PHOTOS = range(29, 34)
+
+# ── Admin: Manage Villas states ───────────────────────────────────────────────────
+MV_SEARCH, MV_CONFIRM_DELETE = range(34, 36)

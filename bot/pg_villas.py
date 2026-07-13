@@ -166,6 +166,83 @@ def update_villa(villa_id: int, data: dict) -> dict:
     raise RuntimeError(f"API error {r.status_code}: {message}")
 
 
+def admin_search_villas(
+    code: str | None = None,
+    city: str | None = None,
+    max_price: float | None = None,
+) -> list[dict]:
+    """
+    Fetch ALL villas (every status) for the admin management panel.
+
+    Filtering is applied client-side:
+      code      — partial match on villa_code (case-insensitive)
+      city      — partial match on city name
+      max_price — inclusive upper bound on price (in Tomans)
+
+    Pass no arguments to return the full villa list.
+    """
+    result = _get("/villas", page=0, page_size=_PAGE_SIZE)
+    if not result:
+        return []
+    rows: list[dict] = result.get("data", [])
+
+    if code:
+        code_upper = code.upper()
+        rows = [v for v in rows if code_upper in (v.get("villa_code") or "").upper()]
+
+    if city:
+        rows = [v for v in rows if city in (v.get("city") or "")]
+
+    if max_price is not None:
+        rows = [v for v in rows if (v.get("price") or 0) <= max_price]
+
+    return rows
+
+
+def delete_villa(villa_id: int) -> bool:
+    """
+    Permanently delete a villa row from the database via
+    DELETE /api/villas/:id/hard.
+
+    Returns True on success, False on any error.
+    """
+    try:
+        with httpx.Client(timeout=10) as client:
+            r = client.delete(f"{API_BASE}/villas/{villa_id}/hard")
+        if r.status_code == 200:
+            return True
+        logger.error(
+            "pg_villas | delete_villa(%s) → HTTP %s: %s",
+            villa_id, r.status_code, r.text,
+        )
+        return False
+    except Exception as exc:
+        logger.error("pg_villas | network error DELETE /villas/%s/hard: %s", villa_id, exc)
+        return False
+
+
+def set_villa_status(villa_id: int, status: str) -> bool:
+    """
+    Update a villa's status via PATCH /api/villas/:id.
+
+    ``status`` must be one of: draft, published, sold, archived, inactive.
+    Returns True on success, False on any error.
+    """
+    try:
+        with httpx.Client(timeout=10) as client:
+            r = client.patch(f"{API_BASE}/villas/{villa_id}", json={"status": status})
+        if r.status_code == 200:
+            return True
+        logger.error(
+            "pg_villas | set_villa_status(%s, %s) → HTTP %s: %s",
+            villa_id, status, r.status_code, r.text,
+        )
+        return False
+    except Exception as exc:
+        logger.error("pg_villas | network error PATCH /villas/%s: %s", villa_id, exc)
+        return False
+
+
 def get_villa_by_code(villa_code: str) -> dict | None:
     """
     Fetch a single villa by MV code.

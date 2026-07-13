@@ -8,6 +8,8 @@
 import type { VillaStatus } from './villaStatus';
 
 export interface CreateVillaRequest {
+  /** Optional MV code (e.g. "MV-1042"). When provided the server uses it as-is and skips auto-generation. When omitted the server assigns the next available code automatically. */
+  villa_code?: string | null;
   city?: string | null;
   area_type?: string | null;
   price?: number | null;

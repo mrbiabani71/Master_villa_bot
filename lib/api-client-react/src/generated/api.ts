@@ -22,6 +22,7 @@ import type {
 import type {
   CreateVillaRequest,
   ErrorResponse,
+  HardDeleteVilla200,
   HealthStatus,
   ListRequestsParams,
   ListVillasParams,
@@ -658,6 +659,76 @@ export const useArchiveVilla = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getArchiveVillaMutationOptions(options));
+    }
+
+export const getHardDeleteVillaUrl = (id: number,) => {
+
+
+
+
+  return `/api/villas/${id}/hard`
+}
+
+/**
+ * @summary Permanently delete a villa record from the database
+ */
+export const hardDeleteVilla = async (id: number, options?: RequestInit): Promise<HardDeleteVilla200> => {
+
+  return customFetch<HardDeleteVilla200>(getHardDeleteVillaUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getHardDeleteVillaMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof hardDeleteVilla>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof hardDeleteVilla>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['hardDeleteVilla'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof hardDeleteVilla>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  hardDeleteVilla(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type HardDeleteVillaMutationResult = NonNullable<Awaited<ReturnType<typeof hardDeleteVilla>>>
+
+    export type HardDeleteVillaMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Permanently delete a villa record from the database
+ */
+export const useHardDeleteVilla = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof hardDeleteVilla>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof hardDeleteVilla>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getHardDeleteVillaMutationOptions(options));
     }
 
 export const getListRequestsUrl = (params?: ListRequestsParams,) => {

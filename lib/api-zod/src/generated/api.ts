@@ -24,12 +24,11 @@ export const listVillasQueryPageDefault = 0;
 export const listVillasQueryPageSizeDefault = 20;
 
 export const ListVillasQueryParams = zod.object({
-  "status": zod.enum(['draft', 'published', 'sold', 'archived']).optional(),
+  "status": zod.enum(['draft', 'published', 'sold', 'archived', 'inactive']).optional(),
   "city": zod.coerce.string().optional(),
   "area_type": zod.coerce.string().optional(),
   "page": zod.coerce.number().default(listVillasQueryPageDefault),
-  "page_size": zod.coerce.number().default(listVillasQueryPageSizeDefault),
-  "telegram_message_id": zod.coerce.number().optional()
+  "page_size": zod.coerce.number().default(listVillasQueryPageSizeDefault)
 })
 
 export const ListVillasResponse = zod.object({
@@ -55,18 +54,9 @@ export const ListVillasResponse = zod.object({
   "longitude": zod.number().nullish(),
   "photos": zod.string().nullish(),
   "video": zod.string().nullish(),
-  "status": zod.enum(['draft', 'published', 'sold', 'archived']),
+  "status": zod.enum(['draft', 'published', 'sold', 'archived', 'inactive']),
   "created_at": zod.string(),
-  "updated_at": zod.string(),
-  "telegram_message_id": zod.number().nullish(),
-  "telegram_media_group_id": zod.string().nullish(),
-  "original_caption": zod.string().nullish(),
-  "region": zod.string().nullish(),
-  "villa_type": zod.string().nullish(),
-  "facade": zod.string().nullish(),
-  "utilities": zod.string().nullish(),
-  "location_status": zod.string().nullish(),
-  "community_status": zod.string().nullish()
+  "updated_at": zod.string()
 })),
   "total": zod.number(),
   "page": zod.number(),
@@ -85,7 +75,7 @@ export const createVillaBodyHasParkingDefault = 0;
 export const createVillaBodyHasStorageDefault = 0;
 
 export const CreateVillaBody = zod.object({
-  "villa_code": zod.string().nullish(),
+  "villa_code": zod.string().nullish().describe('Optional MV code (e.g. \"MV-1042\"). When provided the server uses it as-is and skips auto-generation. When omitted the server assigns the next available code automatically.\n'),
   "city": zod.string().nullish(),
   "area_type": zod.string().nullish(),
   "price": zod.number().nullish(),
@@ -105,18 +95,7 @@ export const CreateVillaBody = zod.object({
   "longitude": zod.number().nullish(),
   "photos": zod.string().nullish(),
   "video": zod.string().nullish(),
-  "status": zod.enum(['draft', 'published', 'sold', 'archived']).optional(),
-  // Channel importer provenance
-  "telegram_message_id": zod.number().nullish(),
-  "telegram_media_group_id": zod.string().nullish(),
-  "original_caption": zod.string().nullish(),
-  // Extended attributes
-  "region": zod.string().nullish(),
-  "villa_type": zod.string().nullish(),
-  "facade": zod.string().nullish(),
-  "utilities": zod.string().nullish(),
-  "location_status": zod.string().nullish(),
-  "community_status": zod.string().nullish()
+  "status": zod.enum(['draft', 'published', 'sold', 'archived', 'inactive']).optional()
 })
 
 export const CreateVillaResponse = zod.object({
@@ -141,18 +120,9 @@ export const CreateVillaResponse = zod.object({
   "longitude": zod.number().nullish(),
   "photos": zod.string().nullish(),
   "video": zod.string().nullish(),
-  "status": zod.enum(['draft', 'published', 'sold', 'archived']),
+  "status": zod.enum(['draft', 'published', 'sold', 'archived', 'inactive']),
   "created_at": zod.string(),
-  "updated_at": zod.string(),
-  "telegram_message_id": zod.number().nullish(),
-  "telegram_media_group_id": zod.string().nullish(),
-  "original_caption": zod.string().nullish(),
-  "region": zod.string().nullish(),
-  "villa_type": zod.string().nullish(),
-  "facade": zod.string().nullish(),
-  "utilities": zod.string().nullish(),
-  "location_status": zod.string().nullish(),
-  "community_status": zod.string().nullish()
+  "updated_at": zod.string()
 })
 
 
@@ -205,18 +175,9 @@ export const GetVillaResponse = zod.object({
   "longitude": zod.number().nullish(),
   "photos": zod.string().nullish(),
   "video": zod.string().nullish(),
-  "status": zod.enum(['draft', 'published', 'sold', 'archived']),
+  "status": zod.enum(['draft', 'published', 'sold', 'archived', 'inactive']),
   "created_at": zod.string(),
-  "updated_at": zod.string(),
-  "telegram_message_id": zod.number().nullish(),
-  "telegram_media_group_id": zod.string().nullish(),
-  "original_caption": zod.string().nullish(),
-  "region": zod.string().nullish(),
-  "villa_type": zod.string().nullish(),
-  "facade": zod.string().nullish(),
-  "utilities": zod.string().nullish(),
-  "location_status": zod.string().nullish(),
-  "community_status": zod.string().nullish()
+  "updated_at": zod.string()
 })
 
 
@@ -247,18 +208,7 @@ export const UpdateVillaBody = zod.object({
   "longitude": zod.number().nullish(),
   "photos": zod.string().nullish(),
   "video": zod.string().nullish(),
-  "status": zod.enum(['draft', 'published', 'sold', 'archived']).optional(),
-  // Channel importer provenance
-  "telegram_message_id": zod.number().nullish(),
-  "telegram_media_group_id": zod.string().nullish(),
-  "original_caption": zod.string().nullish(),
-  // Extended attributes
-  "region": zod.string().nullish(),
-  "villa_type": zod.string().nullish(),
-  "facade": zod.string().nullish(),
-  "utilities": zod.string().nullish(),
-  "location_status": zod.string().nullish(),
-  "community_status": zod.string().nullish()
+  "status": zod.enum(['draft', 'published', 'sold', 'archived', 'inactive']).optional()
 })
 
 export const UpdateVillaResponse = zod.object({
@@ -283,18 +233,9 @@ export const UpdateVillaResponse = zod.object({
   "longitude": zod.number().nullish(),
   "photos": zod.string().nullish(),
   "video": zod.string().nullish(),
-  "status": zod.enum(['draft', 'published', 'sold', 'archived']),
+  "status": zod.enum(['draft', 'published', 'sold', 'archived', 'inactive']),
   "created_at": zod.string(),
-  "updated_at": zod.string(),
-  "telegram_message_id": zod.number().nullish(),
-  "telegram_media_group_id": zod.string().nullish(),
-  "original_caption": zod.string().nullish(),
-  "region": zod.string().nullish(),
-  "villa_type": zod.string().nullish(),
-  "facade": zod.string().nullish(),
-  "utilities": zod.string().nullish(),
-  "location_status": zod.string().nullish(),
-  "community_status": zod.string().nullish()
+  "updated_at": zod.string()
 })
 
 
@@ -306,7 +247,7 @@ export const UpdateVillaStatusParams = zod.object({
 })
 
 export const UpdateVillaStatusBody = zod.object({
-  "status": zod.enum(['draft', 'published', 'sold', 'archived'])
+  "status": zod.enum(['draft', 'published', 'sold', 'archived', 'inactive'])
 })
 
 export const UpdateVillaStatusResponse = zod.object({
@@ -331,7 +272,7 @@ export const UpdateVillaStatusResponse = zod.object({
   "longitude": zod.number().nullish(),
   "photos": zod.string().nullish(),
   "video": zod.string().nullish(),
-  "status": zod.enum(['draft', 'published', 'sold', 'archived']),
+  "status": zod.enum(['draft', 'published', 'sold', 'archived', 'inactive']),
   "created_at": zod.string(),
   "updated_at": zod.string()
 })
@@ -366,9 +307,22 @@ export const ArchiveVillaResponse = zod.object({
   "longitude": zod.number().nullish(),
   "photos": zod.string().nullish(),
   "video": zod.string().nullish(),
-  "status": zod.enum(['draft', 'published', 'sold', 'archived']),
+  "status": zod.enum(['draft', 'published', 'sold', 'archived', 'inactive']),
   "created_at": zod.string(),
   "updated_at": zod.string()
+})
+
+
+/**
+ * @summary Permanently delete a villa record from the database
+ */
+export const HardDeleteVillaParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const HardDeleteVillaResponse = zod.object({
+  "deleted": zod.boolean().optional(),
+  "id": zod.number().optional()
 })
 
 
@@ -447,3 +401,5 @@ export const DeleteRequestParams = zod.object({
 })
 
 export const DeleteRequestResponse = zod.void()
+
+
