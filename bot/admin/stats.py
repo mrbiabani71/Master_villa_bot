@@ -74,7 +74,7 @@ def _build_message(vs: dict, rs: dict | None) -> str:
     # ── By city ───────────────────────────────────────────────────────────────
     by_city: list[dict] = vs.get("by_city", [])
     if by_city:
-        active_total = sum(c.get("count", 0) for c in by_city)
+        active_total = sum(int(c.get("count", 0)) for c in by_city)
         lines += ["", "📍 *بر اساس شهر*", sep]
         for entry in by_city[:10]:  # cap at 10 cities
             city  = entry.get("city") or "—"
@@ -145,7 +145,7 @@ async def handle_stats_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     loading = await update.message.reply_text("📊 در حال بارگذاری آمار…")
 
     # Fetch both endpoints concurrently using asyncio threads (httpx is sync)
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     vs_future = loop.run_in_executor(None, get_villa_stats)
     rs_future = loop.run_in_executor(None, get_request_stats)
     villa_stats, req_stats = await asyncio.gather(vs_future, rs_future)
@@ -159,7 +159,16 @@ async def handle_stats_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
 
-    msg = _build_message(villa_stats, req_stats)
+    try:
+        msg = _build_message(villa_stats, req_stats)
+    except Exception as exc:
+        logger.exception("stats | _build_message failed: %s", exc)
+        await update.message.reply_text(
+            f"❌ خطا در پردازش آمار:\n<code>{exc}</code>",
+            parse_mode="HTML",
+            reply_markup=admin_panel_keyboard,
+        )
+        return
 
     logger.info(
         "stats | total=%s published=%s inactive=%s sold=%s archived=%s requests=%s",
