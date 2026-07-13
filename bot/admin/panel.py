@@ -4,7 +4,7 @@ from telegram.ext import ContextTypes
 from config import ADMIN_ID
 from keyboards import admin_panel_keyboard, settings_keyboard, get_main_keyboard
 
-ADMIN_PANEL_BUTTONS = {"🏡 مدیریت ویلاها", "📋 درخواست‌ها", "📊 آمار", "⚙️ تنظیمات", "✏️ ویرایش ویلا", "⬅️ بازگشت"}
+ADMIN_PANEL_BUTTONS = {"🏡 مدیریت ویلاها", "📋 درخواست‌ها", "📊 آمار", "📥 ایمپورت از کانال", "⚙️ تنظیمات", "✏️ ویرایش ویلا", "⬅️ بازگشت"}
 SETTINGS_BUTTONS = {"🏙 مدیریت شهرها", "📍 مدیریت مناطق", "⬅️ بازگشت"}
 
 
@@ -34,6 +34,11 @@ async def handle_admin_buttons(update: Update, context: ContextTypes.DEFAULT_TYP
                 "بازگشت به منوی اصلی.",
                 reply_markup=get_main_keyboard(update.effective_user.id),
             )
+        return
+
+    if text == "📥 ایمپورت از کانال":
+        from admin.channel_import_panel import handle_import_button
+        await handle_import_button(update, context)
         return
 
     if text == "📊 آمار":

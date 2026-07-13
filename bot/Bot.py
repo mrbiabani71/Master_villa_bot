@@ -21,6 +21,7 @@ from config import TELEGRAM_BOT_TOKEN
 from keyboards import get_main_keyboard
 from database import init_db
 from admin.panel import ADMIN_PANEL_BUTTONS, SETTINGS_BUTTONS, handle_admin_panel, handle_admin_buttons
+from admin.channel_import_panel import cb_import_confirm, cb_import_cancel
 from admin.smart_import_flow import build_smart_import_conv
 from admin.edit_villa_flow import build_edit_villa_conv
 from admin.manage_villas import build_manage_villas_conv
@@ -176,6 +177,10 @@ for handler in visit_callback_handlers():
 app.add_handler(CallbackQueryHandler(cb_req_page,    pattern="^req_page_"))
 app.add_handler(CallbackQueryHandler(cb_req_contact, pattern="^req_contact_"))
 app.add_handler(CallbackQueryHandler(cb_req_delete,  pattern="^req_del_"))
+
+# ── Inline callbacks: channel import panel ────────────────────────────────────
+app.add_handler(CallbackQueryHandler(cb_import_confirm, pattern="^ch_import_confirm$"))
+app.add_handler(CallbackQueryHandler(cb_import_cancel,  pattern="^ch_import_cancel$"))
 
 # ── Channel import (must be before general message handler) ───────────────────
 app.add_handler(channel_import_handler())
