@@ -13,4 +13,8 @@ city?: string;
 area_type?: string;
 page?: number;
 page_size?: number;
+/**
+ * Filter by Telegram message ID (used by the channel importer)
+ */
+telegram_message_id?: number;
 };

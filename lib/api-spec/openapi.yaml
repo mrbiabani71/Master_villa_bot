@@ -57,6 +57,11 @@ paths:
           schema:
             type: integer
             default: 20
+        - name: telegram_message_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by Telegram message ID (used by the channel importer)
       responses:
         "200":
           description: Paginated list of villas

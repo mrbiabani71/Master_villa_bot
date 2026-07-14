@@ -28,7 +28,8 @@ export const ListVillasQueryParams = zod.object({
   "city": zod.coerce.string().optional(),
   "area_type": zod.coerce.string().optional(),
   "page": zod.coerce.number().default(listVillasQueryPageDefault),
-  "page_size": zod.coerce.number().default(listVillasQueryPageSizeDefault)
+  "page_size": zod.coerce.number().default(listVillasQueryPageSizeDefault),
+  "telegram_message_id": zod.coerce.number().optional().describe('Filter by Telegram message ID (used by the channel importer)')
 })
 
 export const ListVillasResponse = zod.object({
