@@ -88,23 +88,11 @@ def get_villa_by_telegram_message_id(telegram_message_id: int) -> dict | None:
     Uses the telegram_message_id filter added to GET /api/villas.
     Returns None if no matching villa is found or the API is unreachable.
     """
-    # TEMP TRACE (remove after debugging telegram_message_id issue)
-    logger.info(
-        "TRACE-3 | get_villa_by_telegram_message_id called with telegram_message_id=%s",
-        telegram_message_id,
-    )
     result = _get("/villas", telegram_message_id=telegram_message_id, page=0, page_size=1)
     if not result:
-        logger.info("TRACE-4 | lookup result: NOT FOUND (no result from API)")
         return None
     rows: list[dict] = result.get("data", [])
-    found = rows[0] if rows else None
-    # TEMP TRACE (remove after debugging telegram_message_id issue)
-    logger.info(
-        "TRACE-4 | lookup result: %s",
-        f"FOUND id={found['id']}" if found else "NOT FOUND (0 rows)",
-    )
-    return found
+    return rows[0] if rows else None
 
 
 def create_villa(data: dict) -> dict:
