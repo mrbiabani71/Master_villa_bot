@@ -4,8 +4,10 @@ A Telegram bot + admin panel for an Iranian villa real estate business: users br
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 3000)
-- `pnpm --filter @workspace/admin-panel run dev` — run the admin panel (port 5000)
+- Workflows (auto-start): `Telegram Bot`, `artifacts/api-server: API Server` (dev port 8080, routed at `/api`), `artifacts/admin-panel: web` (dev port 20130, routed at `/`), `artifacts/mockup-sandbox: Component Preview Server` (canvas preview tool, port 8081)
+- These three app services (`artifacts/api-server`, `artifacts/admin-panel`, `artifacts/mockup-sandbox`) are managed as Replit artifacts — their workflow commands/ports come from each `artifacts/*/.replit-artifact/artifact.toml` and can't be edited via `configureWorkflow`; edit the `artifact.toml` instead.
+- `pnpm --filter @workspace/api-server run dev` — run the API server directly (needs `PORT` env)
+- `pnpm --filter @workspace/admin-panel run dev` — run the admin panel directly (needs `PORT` env)
 - `python3 bot/main.py` — run the Telegram bot
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages

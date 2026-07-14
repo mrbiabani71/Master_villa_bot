@@ -1,4 +1,5 @@
 - [better-sqlite3 migration](better-sqlite3-migration.md) — API server migrated from SQLite (better-sqlite3) to Replit PostgreSQL; routes use drizzle-orm + pg via @workspace/db. Schema in lib/db/src/schema/index.ts.
-- [Admin panel API proxy](admin-panel-api-proxy.md) — Vite dev server needs a proxy for /api → localhost:3000 or the dashboard shows all zeros.
+- [Admin panel API proxy](admin-panel-api-proxy.md) — Vite dev server needs a proxy for /api → the API server's actual dev port, or the dashboard shows all zeros.
 - [Partial unique index + ON CONFLICT](partial-unique-index-conflicts.md) — Drizzle's onConflictDoNothing can't target a partial unique index; use raw SQL.
 - [Telegram channel import: two paths](telegram-channel-import-paths.md) — one-off history backfill needs Pyrogram+API_ID/HASH; live import uses only Bot API channel_post updates, no MTProto creds.
+- [Artifact-managed workflow ports](artifact-managed-workflow-ports.md) — artifact.toml (not .replit) sets dev port/command for artifact-backed services; update dependent proxies to match, don't fight configureWorkflow.
