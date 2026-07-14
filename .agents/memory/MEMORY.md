@@ -3,3 +3,4 @@
 - [Partial unique index + ON CONFLICT](partial-unique-index-conflicts.md) — Drizzle's onConflictDoNothing can't target a partial unique index; use raw SQL.
 - [Telegram channel import: two paths](telegram-channel-import-paths.md) — one-off history backfill needs Pyrogram+API_ID/HASH; live import uses only Bot API channel_post updates, no MTProto creds.
 - [Artifact-managed workflow ports](artifact-managed-workflow-ports.md) — artifact.toml (not .replit) sets dev port/command for artifact-backed services; update dependent proxies to match, don't fight configureWorkflow.
+- [Orval zod schema field stripping](zod-schema-field-stripping.md) — a request field missing from openapi.yaml is silently dropped by zod, not an error; check the spec before blaming client/DB code.

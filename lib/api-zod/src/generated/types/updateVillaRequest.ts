@@ -28,4 +28,7 @@ export interface UpdateVillaRequest {
   photos?: string | null;
   video?: string | null;
   status?: VillaStatus;
+  telegram_message_id?: number | null;
+  telegram_media_group_id?: string | null;
+  original_caption?: string | null;
 }

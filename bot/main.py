@@ -10,7 +10,7 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
     stream=sys.stdout,
 )
-for _name in ("admin.smart_import_flow", "channel_importer", "smart_import.importer", "pg_villas"):
+for _name in ("admin.smart_import_flow", "channel_importer", "smart_import.importer"):
     logging.getLogger(_name).setLevel(logging.DEBUG)
 
 token = os.environ.get("TELEGRAM_BOT_TOKEN", "")

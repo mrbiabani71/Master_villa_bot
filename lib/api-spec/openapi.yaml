@@ -503,6 +503,19 @@ components:
           nullable: true
         status:
           $ref: "#/components/schemas/VillaStatus"
+        telegram_message_id:
+          type: integer
+          nullable: true
+          description: >
+            Telegram message ID of the channel post this villa was imported
+            from. Used to idempotently match edits of the same post to the
+            existing villa instead of creating a duplicate.
+        telegram_media_group_id:
+          type: string
+          nullable: true
+        original_caption:
+          type: string
+          nullable: true
 
     UpdateVillaRequest:
       type: object
@@ -566,6 +579,15 @@ components:
           nullable: true
         status:
           $ref: "#/components/schemas/VillaStatus"
+        telegram_message_id:
+          type: integer
+          nullable: true
+        telegram_media_group_id:
+          type: string
+          nullable: true
+        original_caption:
+          type: string
+          nullable: true
 
     UpdateVillaStatusRequest:
       type: object

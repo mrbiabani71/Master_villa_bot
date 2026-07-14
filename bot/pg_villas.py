@@ -90,21 +90,9 @@ def get_villa_by_telegram_message_id(telegram_message_id: int) -> dict | None:
     """
     result = _get("/villas", telegram_message_id=telegram_message_id, page=0, page_size=1)
     if not result:
-        # TEMP TRACE (remove after debugging telegram_message_id issue)
-        logger.info(
-            "TRACE-3 | get_villa_by_telegram_message_id(%s) -> NOT FOUND (no result from API)",
-            telegram_message_id,
-        )
         return None
     rows: list[dict] = result.get("data", [])
-    found = rows[0] if rows else None
-    # TEMP TRACE (remove after debugging telegram_message_id issue)
-    logger.info(
-        "TRACE-3 | get_villa_by_telegram_message_id(%s) -> %s",
-        telegram_message_id,
-        f"FOUND id={found['id']}" if found else "NOT FOUND (0 rows)",
-    )
-    return found
+    return rows[0] if rows else None
 
 
 def create_villa(data: dict) -> dict:

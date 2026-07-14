@@ -30,4 +30,8 @@ export interface CreateVillaRequest {
   photos?: string | null;
   video?: string | null;
   status?: VillaStatus;
+  /** Telegram message ID of the channel post this villa was imported from. Used to idempotently match edits of the same post to the existing villa instead of creating a duplicate. */
+  telegram_message_id?: number | null;
+  telegram_media_group_id?: string | null;
+  original_caption?: string | null;
 }

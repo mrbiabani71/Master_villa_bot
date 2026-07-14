@@ -54,21 +54,9 @@ def import_villa_from_channel(data: VillaData) -> ImportResult:
     if data.telegram_message_id is not None:
         from pg_villas import get_villa_by_telegram_message_id
         existing = get_villa_by_telegram_message_id(data.telegram_message_id)
-        # TEMP TRACE (remove after debugging telegram_message_id issue)
-        logger.info(
-            "TRACE-4 | import_villa_from_channel: telegram_message_id=%s existing=%s branch=%s",
-            data.telegram_message_id,
-            existing["id"] if existing else None,
-            "update" if existing else "create",
-        )
         if existing:
             data.villa_code = existing["villa_code"]
             return _do_update_by_id(existing["id"], data, existing)
-    else:
-        # TEMP TRACE (remove after debugging telegram_message_id issue)
-        logger.info(
-            "TRACE-4 | import_villa_from_channel: telegram_message_id is None -> branch=create",
-        )
     return _do_create(data)
 
 

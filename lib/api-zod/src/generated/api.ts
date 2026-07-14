@@ -96,7 +96,10 @@ export const CreateVillaBody = zod.object({
   "longitude": zod.number().nullish(),
   "photos": zod.string().nullish(),
   "video": zod.string().nullish(),
-  "status": zod.enum(['draft', 'published', 'sold', 'archived', 'inactive']).optional()
+  "status": zod.enum(['draft', 'published', 'sold', 'archived', 'inactive']).optional(),
+  "telegram_message_id": zod.number().nullish().describe('Telegram message ID of the channel post this villa was imported from. Used to idempotently match edits of the same post to the existing villa instead of creating a duplicate.\n'),
+  "telegram_media_group_id": zod.string().nullish(),
+  "original_caption": zod.string().nullish()
 })
 
 export const CreateVillaResponse = zod.object({
@@ -209,7 +212,10 @@ export const UpdateVillaBody = zod.object({
   "longitude": zod.number().nullish(),
   "photos": zod.string().nullish(),
   "video": zod.string().nullish(),
-  "status": zod.enum(['draft', 'published', 'sold', 'archived', 'inactive']).optional()
+  "status": zod.enum(['draft', 'published', 'sold', 'archived', 'inactive']).optional(),
+  "telegram_message_id": zod.number().nullish(),
+  "telegram_media_group_id": zod.string().nullish(),
+  "original_caption": zod.string().nullish()
 })
 
 export const UpdateVillaResponse = zod.object({
