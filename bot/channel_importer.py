@@ -231,6 +231,12 @@ async def _save_villa(
     data.telegram_media_group_id = media_group_id
     data.original_caption = text
 
+    # TEMP TRACE (remove after debugging telegram_message_id issue)
+    logger.info(
+        "TRACE-2 | after parse: data.telegram_message_id=%s data.telegram_media_group_id=%s villa_code=%s",
+        data.telegram_message_id, data.telegram_media_group_id, data.villa_code,
+    )
+
     logger.info(
         "CHANNEL_IMPORT | pre-import summary: msg_id=%s photos=%d "
         "parsed→ code=%s city=%s price=%s",
@@ -322,6 +328,13 @@ async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE
     logger.debug(
         "CHANNEL_IMPORT | received update chat_id=%s message_id=%s",
         post.chat.id, post.message_id,
+    )
+
+    # TEMP TRACE (remove after debugging telegram_message_id issue)
+    logger.info(
+        "TRACE-1 | update_type=%s chat_id=%s message_id=%s media_group_id=%s",
+        "edited_channel_post" if update.edited_channel_post is not None else "channel_post",
+        post.chat.id, post.message_id, post.media_group_id,
     )
 
     # If CHANNEL_ID is configured, ignore posts from other channels.

@@ -56,7 +56,17 @@ def import_villa_from_channel(data: VillaData) -> ImportResult:
         existing = get_villa_by_telegram_message_id(data.telegram_message_id)
         if existing:
             data.villa_code = existing["villa_code"]
+            # TEMP TRACE (remove after debugging telegram_message_id issue)
+            logger.info(
+                "TRACE-5 | final action=UPDATE existing villa id=%s telegram_message_id=%s",
+                existing["id"], data.telegram_message_id,
+            )
             return _do_update_by_id(existing["id"], data, existing)
+    # TEMP TRACE (remove after debugging telegram_message_id issue)
+    logger.info(
+        "TRACE-5 | final action=CREATE (telegram_message_id=%s had no existing match)",
+        data.telegram_message_id,
+    )
     return _do_create(data)
 
 
