@@ -15,3 +15,6 @@ EV_WAITING_CODE, EV_PREVIEW, EV_EDIT_FIELD, EV_EDIT_VALUE, EV_PHOTOS = range(29,
 
 # ── Admin: Manage Villas states ───────────────────────────────────────────────────
 MV_SEARCH, MV_CONFIRM_DELETE = range(34, 36)
+
+# ── User: advanced villa search states ─────────────────────────────────────────
+ADV_REGION, ADV_CITY, ADV_PRICE, ADV_FILTERS = range(36, 40)

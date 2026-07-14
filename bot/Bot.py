@@ -27,6 +27,7 @@ from admin.edit_villa_flow import build_edit_villa_conv
 from admin.manage_villas import build_manage_villas_conv
 from admin.requests import cb_req_page, cb_req_contact, cb_req_delete
 from user.browse import build_browse_conv, browse_callback_handlers
+from user.advanced_search import build_advanced_search_conv
 from user.visit import build_visit_conv, visit_callback_handlers
 from user.consultation import build_consultation_conv
 from user.faq import show_faq_menu, faq_callback_handlers
@@ -160,6 +161,7 @@ app.add_handler(build_manage_villas_conv())
 app.add_handler(build_consultation_conv())
 app.add_handler(build_visit_conv())   # must precede browse callbacks (intercepts browse_visit_)
 app.add_handler(build_browse_conv())
+app.add_handler(build_advanced_search_conv())
 
 # ── Inline callbacks: FAQ ─────────────────────────────────────────────────────
 for handler in faq_callback_handlers():

@@ -75,6 +75,88 @@ def search_villas(
     return filtered
 
 
+_DOCUMENT_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "tak_barg": ("تک برگ", "تک‌برگ", "تگ برگ"),
+    "parvaneh": ("پروانه",),
+}
+
+
+def advanced_search_villas(
+    area_type: str,
+    min_price: float,
+    max_price: float | None,
+    city: str | None = None,
+    bedrooms: int | None = None,
+    master_bedrooms: int | None = None,
+    has_pool: bool = False,
+    has_jacuzzi: bool = False,
+    has_roof_garden: bool = False,
+    has_parking: bool = False,
+    gated_community: bool = False,
+    document: str | None = None,
+) -> list[dict]:
+    """
+    Guided advanced search: region + optional city + price range + optional
+    amenity/room/document/community filters.  Published villas only.
+
+    ``bedrooms`` / ``master_bedrooms`` are treated as a minimum threshold
+    (e.g. bedrooms=3 matches villas with 3 or more bedrooms).
+
+    ``document`` is one of the keys in ``_DOCUMENT_KEYWORDS`` ("tak_barg" or
+    "parvaneh"); matching is a case-sensitive substring check against the
+    free-text ``document_type`` field, since that data is not normalized.
+
+    ``gated_community`` matches villas whose ``community_status`` mentions
+    "شهرک" (inside a gated community / complex).
+
+    All filtering happens client-side, mirroring ``search_villas`` — the API
+    only exposes status/area_type/city as query params.
+    """
+    result = _get(
+        "/villas",
+        status="published",
+        area_type=area_type,
+        city=city,
+        page=0,
+        page_size=_PAGE_SIZE,
+    )
+    if not result:
+        return []
+
+    rows: list[dict] = result.get("data", [])
+    doc_keywords = _DOCUMENT_KEYWORDS.get(document or "", None)
+
+    filtered = []
+    for v in rows:
+        price = v.get("price")
+        if price is None:
+            continue
+        if price < min_price:
+            continue
+        if max_price is not None and price > max_price:
+            continue
+        if bedrooms is not None and (v.get("bedrooms") or 0) < bedrooms:
+            continue
+        if master_bedrooms is not None and (v.get("master_bedrooms") or 0) < master_bedrooms:
+            continue
+        if has_pool and not v.get("has_pool"):
+            continue
+        if has_jacuzzi and not v.get("has_jacuzzi"):
+            continue
+        if has_roof_garden and not v.get("has_roof_garden"):
+            continue
+        if has_parking and not v.get("has_parking"):
+            continue
+        if gated_community and "شهرک" not in (v.get("community_status") or ""):
+            continue
+        if doc_keywords and not any(k in (v.get("document_type") or "") for k in doc_keywords):
+            continue
+        filtered.append(v)
+
+    filtered.sort(key=lambda v: (v.get("price") or 0, -(v.get("id") or 0)))
+    return filtered
+
+
 def get_villa_by_id(villa_id: int) -> dict | None:
     """Fetch a single villa by its numeric database id."""
     result = _get(f"/villas/{villa_id}")
