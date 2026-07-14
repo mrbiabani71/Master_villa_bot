@@ -11,10 +11,11 @@ SQLite (bot.db) is deliberately NOT used here.
 from __future__ import annotations
 
 import logging
+import os
 
 import httpx
 
-API_BASE   = "http://localhost:3000/api"
+API_BASE   = f"http://localhost:{os.environ.get('API_SERVER_PORT', '8080')}/api"
 _PAGE_SIZE = 100          # comfortably above the expected villa count
 
 logger = logging.getLogger(__name__)
