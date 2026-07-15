@@ -21,3 +21,6 @@ ADV_REGION, ADV_CITY, ADV_PRICE, ADV_FILTERS = range(36, 40)
 
 # ── User: search menu (smart vs category) state ─────────────────────────────────
 SEARCH_MENU = 40
+
+# ── User: smart search (rule-based parser) states ────────────────────────────────
+SMART_TEXT, SMART_ASK_REGION, SMART_ASK_PRICE = range(41, 44)

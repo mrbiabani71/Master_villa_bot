@@ -36,8 +36,13 @@ from telegram.ext import (
 
 from pg_villas import advanced_search_villas
 from keyboards import get_main_keyboard
-from states import SEARCH_MENU, ADV_REGION, ADV_CITY, ADV_PRICE, ADV_FILTERS
+from states import (
+    SEARCH_MENU,
+    ADV_REGION, ADV_CITY, ADV_PRICE, ADV_FILTERS,
+    SMART_TEXT, SMART_ASK_REGION, SMART_ASK_PRICE,
+)
 from user.browse import _send_villa_card
+from user.smart_search import parse_smart_query
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -170,14 +175,16 @@ async def handle_search_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return ConversationHandler.END
 
     if text == SMART_SEARCH_LABEL:
+        context.user_data["smart"] = {}
         await update.message.reply_text(
             "🎯 *جستجوی هوشمند*\n\n"
-            "این قابلیت به‌زودی با هوش مصنوعی فعال می‌شود.\n"
-            "در حال حاضر می‌توانید از «📋 جستجوی دسته‌بندی» استفاده کنید.",
+            "متن جستجوی خود را به فارسی بنویسید، مثلاً:\n"
+            "«ویلای جنگلی چمستان تا ۱۲ میلیارد با استخر»\n"
+            "«ویلا ساحلی محمودآباد ۳ خواب»",
             parse_mode="Markdown",
-            reply_markup=SEARCH_MENU_KB,
+            reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True),
         )
-        return SEARCH_MENU
+        return SMART_TEXT
 
     if text == CATEGORY_SEARCH_LABEL:
         return await start_category_search(update, context)
@@ -333,6 +340,152 @@ async def _run_search(update_message_target, context: ContextTypes.DEFAULT_TYPE,
     )
     await _send_villa_card(chat_id, context, results[0], 0, len(results))
 
+# ── Smart search (Version 1: rule-based parser, no AI/NLP) ─────────────────────
+#
+# The parsed filters are mapped onto the exact same context.user_data["adv"] /
+# ["adv_filters"] shape used by the category search above, then handed to the
+# same _run_search() — so both search paths execute identical, unmodified
+# search logic. Only region and price are treated as required; if either is
+# missing after parsing, we ask ONLY for that one field (no restart of the
+# whole guided flow) and merge the answer into the already-parsed filters.
+
+_SMART_ASK_REGION_KB = REGION_KB
+_SMART_ASK_PRICE_KB  = ReplyKeyboardMarkup([[BACK]], resize_keyboard=True)
+
+
+def _smart_to_adv(parsed: dict) -> tuple[dict, dict]:
+    adv = {
+        "region": parsed.get("region"),
+        "city": parsed.get("city"),
+        "min_price": parsed.get("min_price") or 0,
+        "max_price": parsed.get("max_price"),
+    }
+    f = dict(DEFAULT_FILTERS)
+    f["bedrooms"]        = parsed.get("bedrooms")
+    f["master_bedrooms"] = parsed.get("master_bedrooms")
+    f["pool"]            = bool(parsed.get("pool"))
+    f["jacuzzi"]         = bool(parsed.get("jacuzzi"))
+    f["roof_garden"]     = bool(parsed.get("roof_garden"))
+    f["parking"]         = bool(parsed.get("parking"))
+    f["gated"]           = bool(parsed.get("gated"))
+    f["document"]        = parsed.get("document")
+    return adv, f
+
+
+async def _finish_smart_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    parsed = context.user_data.get("smart", {})
+    adv, f = _smart_to_adv(parsed)
+    context.user_data["adv"] = adv
+    context.user_data["adv_filters"] = f
+
+    await update.message.reply_text(
+        "🔍 در حال جستجو...",
+        reply_markup=get_main_keyboard(update.effective_user.id),
+    )
+    await _run_search(update.message, context, update.effective_chat.id)
+
+    context.user_data.pop("adv", None)
+    context.user_data.pop("adv_filters", None)
+    context.user_data.pop("smart", None)
+    return ConversationHandler.END
+
+
+async def handle_smart_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text.strip()
+
+    if text == BACK:
+        context.user_data.pop("smart", None)
+        await update.message.reply_text(
+            "روش جستجو را انتخاب کنید:",
+            reply_markup=SEARCH_MENU_KB,
+        )
+        return SEARCH_MENU
+
+    parsed = parse_smart_query(text)
+    context.user_data["smart"] = parsed
+
+    if parsed.get("region") is None:
+        await update.message.reply_text(
+            "متوجه منطقه مورد نظر نشدم 🙏\n"
+            "لطفاً نوع منطقه را انتخاب کنید:",
+            reply_markup=_SMART_ASK_REGION_KB,
+        )
+        return SMART_ASK_REGION
+
+    if parsed.get("min_price") is None and parsed.get("max_price") is None:
+        await update.message.reply_text(
+            "متوجه بازه قیمتی نشدم 🙏\n"
+            "لطفاً محدوده قیمت را بنویسید، مثلاً: «تا ۱۰ میلیارد» یا «بین ۷ تا ۱۲ میلیارد»",
+            reply_markup=_SMART_ASK_PRICE_KB,
+        )
+        return SMART_ASK_PRICE
+
+    return await _finish_smart_search(update, context)
+
+
+async def handle_smart_ask_region(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text.strip()
+
+    if text == BACK:
+        context.user_data.pop("smart", None)
+        await update.message.reply_text(
+            "روش جستجو را انتخاب کنید:",
+            reply_markup=SEARCH_MENU_KB,
+        )
+        return SEARCH_MENU
+
+    region = REGION_MAP.get(text)
+    if region is None:
+        region = parse_smart_query(text).get("region")
+
+    if region is None:
+        await update.message.reply_text(
+            "لطفاً یکی از گزینه‌های موجود را انتخاب کنید:",
+            reply_markup=_SMART_ASK_REGION_KB,
+        )
+        return SMART_ASK_REGION
+
+    parsed = context.user_data.setdefault("smart", {})
+    parsed["region"] = region
+
+    if parsed.get("min_price") is None and parsed.get("max_price") is None:
+        await update.message.reply_text(
+            "متوجه بازه قیمتی نشدم 🙏\n"
+            "لطفاً محدوده قیمت را بنویسید، مثلاً: «تا ۱۰ میلیارد» یا «بین ۷ تا ۱۲ میلیارد»",
+            reply_markup=_SMART_ASK_PRICE_KB,
+        )
+        return SMART_ASK_PRICE
+
+    return await _finish_smart_search(update, context)
+
+
+async def handle_smart_ask_price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text.strip()
+
+    if text == BACK:
+        context.user_data.pop("smart", None)
+        await update.message.reply_text(
+            "روش جستجو را انتخاب کنید:",
+            reply_markup=SEARCH_MENU_KB,
+        )
+        return SEARCH_MENU
+
+    parsed_extra = parse_smart_query(text)
+    min_price, max_price = parsed_extra.get("min_price"), parsed_extra.get("max_price")
+
+    if min_price is None and max_price is None:
+        await update.message.reply_text(
+            "متوجه نشدم 🙏 لطفاً محدوده قیمت را بنویسید، مثلاً: «تا ۱۰ میلیارد» یا «بین ۷ تا ۱۲ میلیارد»",
+            reply_markup=_SMART_ASK_PRICE_KB,
+        )
+        return SMART_ASK_PRICE
+
+    parsed = context.user_data.setdefault("smart", {})
+    parsed["min_price"] = min_price
+    parsed["max_price"] = max_price
+
+    return await _finish_smart_search(update, context)
+
 
 async def cb_adv_filters(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
@@ -396,11 +549,14 @@ def build_advanced_search_conv() -> ConversationHandler:
             MessageHandler(filters.Regex("^🔍 جستجو ویلا$"), start_search_menu),
         ],
         states={
-            SEARCH_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_search_menu)],
-            ADV_REGION:  [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_adv_region)],
-            ADV_CITY:    [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_adv_city)],
-            ADV_PRICE:   [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_adv_price)],
-            ADV_FILTERS: [CallbackQueryHandler(cb_adv_filters, pattern="^advf_")],
+            SEARCH_MENU:     [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_search_menu)],
+            SMART_TEXT:      [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_smart_text)],
+            SMART_ASK_REGION:[MessageHandler(filters.TEXT & ~filters.COMMAND, handle_smart_ask_region)],
+            SMART_ASK_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_smart_ask_price)],
+            ADV_REGION:      [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_adv_region)],
+            ADV_CITY:        [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_adv_city)],
+            ADV_PRICE:       [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_adv_price)],
+            ADV_FILTERS:     [CallbackQueryHandler(cb_adv_filters, pattern="^advf_")],
         },
         fallbacks=[
             CommandHandler("cancel", cancel_advanced_search),
