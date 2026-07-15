@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 
 import httpx
 
@@ -19,6 +20,57 @@ API_BASE   = f"http://localhost:{os.environ.get('API_SERVER_PORT', '8080')}/api"
 _PAGE_SIZE = 100          # comfortably above the expected villa count
 
 logger = logging.getLogger(__name__)
+
+# ── Rate-limit handling ────────────────────────────────────────────────────────
+# The API enforces 60 requests / 60 s.  During a bulk channel import every
+# villa costs one GET (existence check) + one POST/PUT (write), so we pace
+# write operations at ≥ 1 s apart and retry automatically on 429.
+_WRITE_PACING_DELAY = 1.0          # seconds between consecutive write requests
+_MAX_RETRIES        = 4            # up to 5 total attempts (1 original + 4 retries)
+_RETRY_BACKOFF      = (5, 15, 30, 60)  # wait per retry (seconds); last matches window
+
+
+def _execute_with_retry(method: str, url: str, **kwargs) -> httpx.Response:
+    """
+    Execute a write (POST / PUT) HTTP request with:
+    - a small upfront pacing delay to stay below the rate limit during bulk imports
+    - automatic retry on HTTP 429, honouring ``retry_after_seconds`` from the
+      response body and falling back to progressive back-off
+
+    On persistent 429 after all retries, raises ``RuntimeError`` so the caller
+    records it as a failed item (retrying the import later will pick it up).
+    """
+    time.sleep(_WRITE_PACING_DELAY)   # pace writes; keeps bulk import ≤ 60/min
+
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            with httpx.Client(timeout=10) as client:
+                r = getattr(client, method)(url, **kwargs)
+        except Exception as exc:
+            raise RuntimeError(f"Network error on {method.upper()} {url}: {exc}") from exc
+
+        if r.status_code != 429:
+            return r                  # success or a non-rate-limit error — let caller handle
+
+        if attempt >= _MAX_RETRIES:
+            break                     # exhausted — fall through to the RuntimeError below
+
+        # Determine how long to wait
+        try:
+            wait: float = float(r.json().get("retry_after_seconds") or _RETRY_BACKOFF[attempt])
+        except Exception:
+            wait = float(_RETRY_BACKOFF[attempt])
+
+        logger.warning(
+            "pg_villas | 429 rate-limited %s %s — waiting %.0fs (attempt %d/%d)",
+            method.upper(), url, wait, attempt + 1, _MAX_RETRIES,
+        )
+        time.sleep(wait)
+
+    raise RuntimeError(
+        f"Rate limit still active after {_MAX_RETRIES} retries "
+        f"on {method.upper()} {url} — mark as failed and retry later"
+    )
 
 
 def _get(path: str, **params: object) -> dict | None:
@@ -190,8 +242,9 @@ def create_villa(data: dict) -> dict:
     Raises ``RuntimeError`` on network failures or unexpected HTTP responses.
     """
     try:
-        with httpx.Client(timeout=10) as client:
-            r = client.post(f"{API_BASE}/villas", json=data)
+        r = _execute_with_retry("post", f"{API_BASE}/villas", json=data)
+    except RuntimeError:
+        raise
     except Exception as exc:
         logger.error("pg_villas | network error POST /villas: %s", exc)
         raise RuntimeError(f"Network error while creating villa: {exc}") from exc
@@ -230,8 +283,9 @@ def update_villa(villa_id: int, data: dict) -> dict:
     Raises ``RuntimeError`` on network failures or unexpected HTTP responses.
     """
     try:
-        with httpx.Client(timeout=10) as client:
-            r = client.put(f"{API_BASE}/villas/{villa_id}", json=data)
+        r = _execute_with_retry("put", f"{API_BASE}/villas/{villa_id}", json=data)
+    except RuntimeError:
+        raise
     except Exception as exc:
         logger.error("pg_villas | network error PUT /villas/%s: %s", villa_id, exc)
         raise RuntimeError(f"Network error while updating villa: {exc}") from exc
