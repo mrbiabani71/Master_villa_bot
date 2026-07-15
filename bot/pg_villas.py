@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 
 import httpx
@@ -21,28 +22,61 @@ _PAGE_SIZE = 100          # comfortably above the expected villa count
 
 logger = logging.getLogger(__name__)
 
-# ── Rate-limit handling ────────────────────────────────────────────────────────
-# The API enforces 60 requests / 60 s.  During a bulk channel import every
-# villa costs one GET (existence check) + one POST/PUT (write), so we pace
-# write operations at ≥ 1 s apart and retry automatically on 429.
-_WRITE_PACING_DELAY = 1.0          # seconds between consecutive write requests
-_MAX_RETRIES        = 4            # up to 5 total attempts (1 original + 4 retries)
-_RETRY_BACKOFF      = (5, 15, 30, 60)  # wait per retry (seconds); last matches window
+# ── Shared rate-limit budget ───────────────────────────────────────────────────
+# The API enforces 60 requests / 60 s.  Every villa import costs 1 GET
+# (existence check) + 1 POST or PUT (write).  With only writes paced the
+# combined rate was ~2 req/s = ~120 req/min — twice the budget.
+#
+# The fix: a single token-bucket that paces ALL requests (reads and writes)
+# to ≤ 1 per second.  Each caller reserves a slot by advancing
+# _next_slot_at under a lock, then sleeps outside the lock so other threads
+# are not blocked while waiting.
+#
+# Slots for 45 groups → 90 requests → ~90 s total (well within any window).
+# For the live bot a single GET/POST per message arrives at most once every
+# several minutes, so the pacing has no perceptible user impact.
+
+_rate_lock     = threading.Lock()
+_next_slot_at  = 0.0      # monotonic timestamp of the next available slot
+_MIN_REQUEST_GAP = 1.0    # seconds — keeps all requests ≤ 60 / 60 s
+
+_MAX_RETRIES   = 4                      # 5 total attempts (1 original + 4 retries)
+_RETRY_BACKOFF = (5, 15, 30, 60)        # per-retry wait; last matches the 60-s window
+
+
+def _pace_request() -> None:
+    """
+    Reserve the next available 1-second slot and sleep until it arrives.
+
+    Thread-safe: multiple callers in different threads each get a slot
+    exactly _MIN_REQUEST_GAP seconds apart, preventing burst spikes from
+    concurrent import threads or the live-bot handler.
+    """
+    global _next_slot_at
+    with _rate_lock:
+        now  = time.monotonic()
+        # If the queue is in the past, start fresh from now.
+        slot = max(now, _next_slot_at)
+        _next_slot_at = slot + _MIN_REQUEST_GAP
+        wait = slot - now
+    if wait > 0:
+        time.sleep(wait)
 
 
 def _execute_with_retry(method: str, url: str, **kwargs) -> httpx.Response:
     """
     Execute a write (POST / PUT) HTTP request with:
-    - a small upfront pacing delay to stay below the rate limit during bulk imports
+    - shared pacing via _pace_request() — counts against the same budget as GETs
     - automatic retry on HTTP 429, honouring ``retry_after_seconds`` from the
       response body and falling back to progressive back-off
 
     On persistent 429 after all retries, raises ``RuntimeError`` so the caller
-    records it as a failed item (retrying the import later will pick it up).
+    records the item as failed; re-running the import later will pick it up
+    (imports are idempotent by telegram_message_id).
     """
-    time.sleep(_WRITE_PACING_DELAY)   # pace writes; keeps bulk import ≤ 60/min
-
     for attempt in range(_MAX_RETRIES + 1):
+        _pace_request()   # enforce shared gap before every attempt
+
         try:
             with httpx.Client(timeout=10) as client:
                 r = getattr(client, method)(url, **kwargs)
@@ -50,12 +84,11 @@ def _execute_with_retry(method: str, url: str, **kwargs) -> httpx.Response:
             raise RuntimeError(f"Network error on {method.upper()} {url}: {exc}") from exc
 
         if r.status_code != 429:
-            return r                  # success or a non-rate-limit error — let caller handle
+            return r          # success or a non-rate-limit error — let caller handle
 
         if attempt >= _MAX_RETRIES:
-            break                     # exhausted — fall through to the RuntimeError below
+            break             # exhausted — fall through to the RuntimeError below
 
-        # Determine how long to wait
         try:
             wait: float = float(r.json().get("retry_after_seconds") or _RETRY_BACKOFF[attempt])
         except Exception:
@@ -74,16 +107,52 @@ def _execute_with_retry(method: str, url: str, **kwargs) -> httpx.Response:
 
 
 def _get(path: str, **params: object) -> dict | None:
-    """GET {API_BASE}{path} with optional query params; return parsed JSON or None."""
+    """
+    GET {API_BASE}{path} with optional query params; return parsed JSON or None.
+
+    Paced via the shared token bucket and retried on 429 (up to _MAX_RETRIES
+    times) so that a rate-limit hit on a lookup is never silently converted
+    into a spurious create on the write path.
+    """
     clean = {k: v for k, v in params.items() if v is not None}
-    try:
-        with httpx.Client(timeout=10) as client:
-            r = client.get(f"{API_BASE}{path}", params=clean)
+    url   = f"{API_BASE}{path}"
+
+    for attempt in range(_MAX_RETRIES + 1):
+        _pace_request()   # share the budget with write requests
+
+        try:
+            with httpx.Client(timeout=10) as client:
+                r = client.get(url, params=clean)
+        except Exception as exc:
+            logger.error("pg_villas | network error GET %s params=%s: %s", path, clean, exc)
+            return None
+
+        if r.status_code == 429:
+            if attempt >= _MAX_RETRIES:
+                logger.error(
+                    "pg_villas | GET %s still 429 after %d retries — returning None",
+                    path, _MAX_RETRIES,
+                )
+                return None
+            try:
+                wait = float(r.json().get("retry_after_seconds") or _RETRY_BACKOFF[attempt])
+            except Exception:
+                wait = float(_RETRY_BACKOFF[attempt])
+            logger.warning(
+                "pg_villas | 429 rate-limited GET %s — waiting %.0fs (attempt %d/%d)",
+                path, wait, attempt + 1, _MAX_RETRIES,
+            )
+            time.sleep(wait)
+            continue
+
+        try:
             r.raise_for_status()
             return r.json()
-    except Exception as exc:
-        logger.error("pg_villas | API error GET %s params=%s: %s", path, clean, exc)
-        return None
+        except Exception as exc:
+            logger.error("pg_villas | API error GET %s params=%s: %s", path, clean, exc)
+            return None
+
+    return None
 
 
 def search_villas(

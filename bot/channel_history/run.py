@@ -79,15 +79,17 @@ async def main() -> None:
 
     # ── Check API server is reachable before starting ─────────────────────────
     import httpx
+    api_port   = os.environ.get("API_SERVER_PORT", "8080")
+    health_url = f"http://localhost:{api_port}/api/healthz"
     try:
         with httpx.Client(timeout=5) as client:
-            r = client.get("http://localhost:3000/api/healthz")
+            r = client.get(health_url)
             r.raise_for_status()
     except Exception as exc:
         logger.error(
-            "API server is not reachable at http://localhost:3000/api/healthz\n"
+            "API server is not reachable at %s\n"
             "Make sure the API Server workflow is running before importing.\n"
-            "Error: %s", exc,
+            "Error: %s", health_url, exc,
         )
         sys.exit(1)
 
