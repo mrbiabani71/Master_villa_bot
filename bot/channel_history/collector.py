@@ -188,11 +188,13 @@ async def collect_channel_history(
     Parameters
     ----------
     bot_token : str
-        Telegram bot token.  The bot must be an admin of the target channel.
+        Kept for API compatibility; not passed to Pyrogram.  History access
+        requires a user account session, not a bot token.  Run
+        ``python3 bot/channel_history/_auth.py`` once to create the session.
     api_id : int
-        API ID from my.telegram.org.
+        API ID from my.telegram.org (for the dedicated user account).
     api_hash : str
-        API hash from my.telegram.org.
+        API hash from my.telegram.org (for the dedicated user account).
     channel_id : int
         Numeric channel ID (e.g. -1001234567890).
     workdir : str | None
@@ -204,15 +206,21 @@ async def collect_channel_history(
     except ImportError as exc:
         raise RuntimeError(
             "pyrogram is required for channel history import.\n"
-            "Install it with:  uv add pyrogram\n"
+            "Install it with:  pip install pyrogram\n"
             f"Original error: {exc}"
         ) from exc
+
+    # Pyrogram 2.x hard-codes MIN_CHANNEL_ID using the old 32-bit cap; large
+    # channel IDs (raw id > 2 147 483 647) fall outside that range and raise
+    # "Peer id invalid".  Extend the constant before any peer resolution runs.
+    import pyrogram.utils as _pyu
+    _pyu.MIN_CHANNEL_ID = -1009999999999999
 
     if workdir is None:
         # Store the session next to this file (inside bot/)
         workdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    session_name = "channel_history_bot"
+    session_name = "channel_history_user"
     logger.info(
         "collect_channel_history: connecting (channel=%s, session=%s/%s.session)",
         channel_id, workdir, session_name,
@@ -220,11 +228,13 @@ async def collect_channel_history(
 
     all_messages: list = []
 
+    # Note: bot_token is intentionally NOT passed — Telegram's MTProto API
+    # forbids bots from calling messages.GetHistory.  A user-account session
+    # (created by _auth.py) must exist at workdir/channel_history_user.session.
     async with Client(
         session_name,
         api_id=api_id,
         api_hash=api_hash,
-        bot_token=bot_token,
         workdir=workdir,
     ) as app:
         async for message in app.get_chat_history(channel_id):

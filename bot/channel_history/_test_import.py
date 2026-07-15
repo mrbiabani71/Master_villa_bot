@@ -67,28 +67,32 @@ async def main() -> None:
         sys.exit(1)
 
     # ── 3. Fetch latest N raw messages via Pyrogram (in-memory session) ───────
-    # Pyrogram 2.0.106 hard-codes MIN_CHANNEL_ID = -1002147483647 (old 32-bit cap).
-    # Our channel ID 4187733480 exceeds that, causing "Peer id invalid".
-    # Patch the constant before any Pyrogram peer resolution runs.
+    # collector.py patches MIN_CHANNEL_ID for large channel IDs; mirror here
+    # so peer resolution works before collector is imported.
     import pyrogram.utils as _pyu
     _pyu.MIN_CHANNEL_ID = -1009999999999999
 
     from pyrogram import Client
     from channel_history.collector import _group_messages  # existing private fn
 
-    # Use the same persistent session as collector.py so the channel peer is
-    # resolved and cached (in-memory sessions can't resolve numeric channel IDs).
-    session_name = "channel_history_bot"
+    # Use the user-account session (same name/location as collector.py).
+    # bot_token is NOT passed — bots cannot call messages.GetHistory via MTProto.
+    session_name = "channel_history_user"
     workdir      = _BOT_ROOT
 
+    session_file = os.path.join(workdir, f"{session_name}.session")
+    if not os.path.exists(session_file):
+        print(f"❌ User session not found: {session_file}")
+        print("   Run this first:  python3 bot/channel_history/_auth.py")
+        sys.exit(1)
+
     print(f"\nFetching latest {RAW_FETCH_LIMIT} messages from channel {channel_id}…")
-    print(f"  Session: {workdir}/{session_name}.session")
+    print(f"  Session: {session_file}")
     raw_messages: list = []
     async with Client(
         session_name,
         api_id=api_id,
         api_hash=api_hash,
-        bot_token=bot_token,
         workdir=workdir,
     ) as app:
         async for msg in app.get_chat_history(channel_id, limit=RAW_FETCH_LIMIT):
