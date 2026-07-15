@@ -115,7 +115,7 @@ def _group_messages(messages: list) -> list[VillaGroup]:
                     text=text.strip(),
                     photo_file_ids=photo_ids,
                     telegram_message_id=album[0].id,
-                    telegram_media_group_id=gid,
+                    telegram_media_group_id=str(gid),  # Pyrogram returns int; API/Zod expect str
                     original_caption=caption.strip(),
                     message_ids=all_ids,
                 ))

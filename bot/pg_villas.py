@@ -199,6 +199,11 @@ def create_villa(data: dict) -> dict:
     if r.status_code == 201:
         return r.json()
 
+    # 200 means ON CONFLICT DO NOTHING fired — the row already exists.
+    # The API returns the existing villa so callers can read its id/code.
+    if r.status_code == 200:
+        return r.json()
+
     # Surface clean errors for known status codes
     try:
         body = r.json()
