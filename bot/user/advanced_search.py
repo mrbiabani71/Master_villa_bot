@@ -1,9 +1,13 @@
 """
-Guided advanced villa search.
+Villa search entry point and category (step-by-step filter) search.
 
-Flow: region → city → price range → optional filters (bedrooms, master
-bedrooms, pool, jacuzzi, roof garden, parking, document status, gated
-community) → results.
+Entering "🔍 جستجو ویلا" first shows a search-type menu with two options:
+  - 🎯 جستجوی هوشمند   — placeholder for a future AI/NLP smart search;
+    no AI/NLP is implemented yet, it just explains the feature is coming.
+  - 📋 جستجوی دسته‌بندی — the existing guided step-by-step filter flow
+    (unchanged): region → city → price range → optional filters (bedrooms,
+    master bedrooms, pool, jacuzzi, roof garden, parking, document status,
+    gated community) → results.
 
 Results are rendered with the exact same villa-card renderer used by the
 basic search (photos, villa code, city, price, main details, and a
@@ -32,13 +36,21 @@ from telegram.ext import (
 
 from pg_villas import advanced_search_villas
 from keyboards import get_main_keyboard
-from states import ADV_REGION, ADV_CITY, ADV_PRICE, ADV_FILTERS
+from states import SEARCH_MENU, ADV_REGION, ADV_CITY, ADV_PRICE, ADV_FILTERS
 from user.browse import _send_villa_card
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 BACK = "🔙 بازگشت"
 ALL_CITIES = "🏙 همه شهرهای این منطقه"
+
+SMART_SEARCH_LABEL    = "🎯 جستجوی هوشمند"
+CATEGORY_SEARCH_LABEL = "📋 جستجوی دسته‌بندی"
+
+SEARCH_MENU_KB = ReplyKeyboardMarkup(
+    [[SMART_SEARCH_LABEL], [CATEGORY_SEARCH_LABEL], [BACK]],
+    resize_keyboard=True,
+)
 
 REGION_LABELS = ["🏖 ساحلی", "🌲 جنگلی"]
 REGION_MAP = {"🏖 ساحلی": "ساحلی", "🌲 جنگلی": "جنگلی"}
@@ -135,13 +147,54 @@ def _filters_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🔍 مشاهده نتایج",         callback_data="advf_search")],
     ])
 
+# ── Step 0: search menu (smart vs category) ────────────────────────────────────
+
+async def start_search_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text(
+        "🔍 *جستجوی ویلا*\n\n"
+        "روش جستجو را انتخاب کنید:",
+        parse_mode="Markdown",
+        reply_markup=SEARCH_MENU_KB,
+    )
+    return SEARCH_MENU
+
+
+async def handle_search_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text.strip()
+
+    if text == BACK:
+        await update.message.reply_text(
+            "به منوی اصلی بازگشتید.",
+            reply_markup=get_main_keyboard(update.effective_user.id),
+        )
+        return ConversationHandler.END
+
+    if text == SMART_SEARCH_LABEL:
+        await update.message.reply_text(
+            "🎯 *جستجوی هوشمند*\n\n"
+            "این قابلیت به‌زودی با هوش مصنوعی فعال می‌شود.\n"
+            "در حال حاضر می‌توانید از «📋 جستجوی دسته‌بندی» استفاده کنید.",
+            parse_mode="Markdown",
+            reply_markup=SEARCH_MENU_KB,
+        )
+        return SEARCH_MENU
+
+    if text == CATEGORY_SEARCH_LABEL:
+        return await start_category_search(update, context)
+
+    await update.message.reply_text(
+        "لطفاً یکی از گزینه‌های موجود را انتخاب کنید:",
+        reply_markup=SEARCH_MENU_KB,
+    )
+    return SEARCH_MENU
+
 # ── Step 1: region ─────────────────────────────────────────────────────────────
 
-async def start_advanced_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def start_category_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data["adv"] = {}
     context.user_data["adv_filters"] = dict(DEFAULT_FILTERS)
     await update.message.reply_text(
-        "🎯 *جستجوی پیشرفته ویلا*\n\n"
+        "📋 *جستجوی دسته‌بندی ویلا*\n\n"
         "۱️⃣ ابتدا نوع منطقه را انتخاب کنید:",
         parse_mode="Markdown",
         reply_markup=REGION_KB,
@@ -156,10 +209,10 @@ async def handle_adv_region(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         context.user_data.pop("adv", None)
         context.user_data.pop("adv_filters", None)
         await update.message.reply_text(
-            "به منوی اصلی بازگشتید.",
-            reply_markup=get_main_keyboard(update.effective_user.id),
+            "روش جستجو را انتخاب کنید:",
+            reply_markup=SEARCH_MENU_KB,
         )
-        return ConversationHandler.END
+        return SEARCH_MENU
 
     region = REGION_MAP.get(text)
     if region is None:
@@ -330,7 +383,7 @@ async def cancel_advanced_search(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data.pop("adv", None)
     context.user_data.pop("adv_filters", None)
     await update.message.reply_text(
-        "جستجوی پیشرفته لغو شد.",
+        "جستجوی دسته‌بندی لغو شد.",
         reply_markup=get_main_keyboard(update.effective_user.id),
     )
     return ConversationHandler.END
@@ -340,9 +393,10 @@ async def cancel_advanced_search(update: Update, context: ContextTypes.DEFAULT_T
 def build_advanced_search_conv() -> ConversationHandler:
     return ConversationHandler(
         entry_points=[
-            MessageHandler(filters.Regex("^🎯 جستجوی پیشرفته$"), start_advanced_search),
+            MessageHandler(filters.Regex("^🔍 جستجو ویلا$"), start_search_menu),
         ],
         states={
+            SEARCH_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_search_menu)],
             ADV_REGION:  [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_adv_region)],
             ADV_CITY:    [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_adv_city)],
             ADV_PRICE:   [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_adv_price)],

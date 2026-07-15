@@ -18,3 +18,6 @@ MV_SEARCH, MV_CONFIRM_DELETE = range(34, 36)
 
 # ── User: advanced villa search states ─────────────────────────────────────────
 ADV_REGION, ADV_CITY, ADV_PRICE, ADV_FILTERS = range(36, 40)
+
+# ── User: search menu (smart vs category) state ─────────────────────────────────
+SEARCH_MENU = 40

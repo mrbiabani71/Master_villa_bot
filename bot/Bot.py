@@ -160,8 +160,13 @@ app.add_handler(build_edit_villa_conv())
 app.add_handler(build_manage_villas_conv())
 app.add_handler(build_consultation_conv())
 app.add_handler(build_visit_conv())   # must precede browse callbacks (intercepts browse_visit_)
-app.add_handler(build_browse_conv())
+# build_advanced_search_conv() now owns the "🔍 جستجو ویلا" entry text (shows a
+# search-type menu: smart search placeholder vs. the category/filter flow), so
+# it must be registered before build_browse_conv() — same entry text, first
+# registered handler wins. browse.py itself is untouched; its own conv entry
+# point is superseded but its card-rendering callbacks are still reused below.
 app.add_handler(build_advanced_search_conv())
+app.add_handler(build_browse_conv())
 
 # ── Inline callbacks: FAQ ─────────────────────────────────────────────────────
 for handler in faq_callback_handlers():
