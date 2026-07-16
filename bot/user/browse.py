@@ -1,7 +1,5 @@
 from telegram import (
     Update,
-    ReplyKeyboardMarkup,
-    ReplyKeyboardRemove,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     InputMediaPhoto,
@@ -22,16 +20,11 @@ from utils import fmt_price, price_category
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-BACK = "🔙 بازگشت"
-
-AREA_TYPE_LABELS = [
-    "🏖 ساحلی  (محمودآباد، ایزدشهر، سرخرود)",
-    "🌲 جنگلی  (نور، آمل، چمستان)",
+# index → (internal value, short display label)
+AREAS: list[tuple[str, str]] = [
+    ("ساحلی", "🏖 ساحلی  (محمودآباد، ایزدشهر، سرخرود)"),
+    ("جنگلی", "🌲 جنگلی  (نور، آمل، چمستان)"),
 ]
-AREA_TYPE_MAP = {
-    "🏖 ساحلی  (محمودآباد، ایزدشهر، سرخرود)": "ساحلی",
-    "🌲 جنگلی  (نور، آمل، چمستان)": "جنگلی",
-}
 
 BUDGETS: list[tuple[str, float, float | None]] = [
     ("🟢 اقتصادی    (زیر ۷ میلیارد)",         0,              7_000_000_000),
@@ -40,19 +33,22 @@ BUDGETS: list[tuple[str, float, float | None]] = [
     ("🔴 لوکس       (بالای ۱۵ میلیارد)",      15_000_000_000, None),
 ]
 BUDGET_LABELS = [b[0] for b in BUDGETS]
-BUDGET_MAP    = {b[0]: (b[1], b[2]) for b in BUDGETS}
 
-# ── Keyboards ──────────────────────────────────────────────────────────────────
+# ── Inline keyboard builders ───────────────────────────────────────────────────
 
-BROWSE_AREA_KB = ReplyKeyboardMarkup(
-    [[label] for label in AREA_TYPE_LABELS] + [[BACK]],
-    resize_keyboard=True,
-)
+def _browse_area_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton(label, callback_data=f"browse_area_{i}")]
+         for i, (_, label) in enumerate(AREAS)]
+        + [[InlineKeyboardButton("🔙 بازگشت", callback_data="browse_area_back")]]
+    )
 
-BROWSE_BUDGET_KB = ReplyKeyboardMarkup(
-    [[label] for label in BUDGET_LABELS] + [[BACK]],
-    resize_keyboard=True,
-)
+def _browse_budget_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton(label, callback_data=f"browse_budget_{i}")]
+         for i, label in enumerate(BUDGET_LABELS)]
+        + [[InlineKeyboardButton("🔙 بازگشت", callback_data="browse_budget_back")]]
+    )
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -201,66 +197,56 @@ async def start_browse(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         "🔍 *جستجوی ویلا*\n\n"
         "منطقه مورد نظر خود را انتخاب کنید:",
         parse_mode="Markdown",
-        reply_markup=BROWSE_AREA_KB,
+        reply_markup=_browse_area_kb(),
     )
     return BROWSE_AREA
 
 
 async def handle_browse_area(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = update.message.text.strip()
+    query = update.callback_query
+    await query.answer()
 
-    if text == BACK:
+    if query.data == "browse_area_back":
         context.user_data.pop("browse", None)
-        await update.message.reply_text(
+        await query.edit_message_text(
             "به منوی اصلی بازگشتید.",
-            reply_markup=get_main_keyboard(update.effective_user.id),
+            parse_mode="Markdown",
         )
         return ConversationHandler.END
 
-    area_value = AREA_TYPE_MAP.get(text)
-    if area_value is None:
-        await update.message.reply_text(
-            "لطفاً یکی از گزینه‌های موجود را انتخاب کنید:",
-            reply_markup=BROWSE_AREA_KB,
-        )
-        return BROWSE_AREA
-
+    idx        = int(query.data.split("_")[-1])
+    area_value, area_label = AREAS[idx]
+    context.user_data.setdefault("browse", {})
     context.user_data["browse"]["area_type"]  = area_value
-    context.user_data["browse"]["area_label"] = text
+    context.user_data["browse"]["area_label"] = area_label
 
-    await update.message.reply_text(
+    await query.edit_message_text(
         "💰 بازه قیمتی مورد نظر را انتخاب کنید:",
-        reply_markup=BROWSE_BUDGET_KB,
+        reply_markup=_browse_budget_kb(),
     )
     return BROWSE_BUDGET
 
 # ── Step 2: choose budget → search ────────────────────────────────────────────
 
 async def handle_browse_budget(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = update.message.text.strip()
+    query = update.callback_query
+    await query.answer()
 
-    if text == BACK:
-        await update.message.reply_text(
+    if query.data == "browse_budget_back":
+        await query.edit_message_text(
             "🔍 *جستجوی ویلا*\n\n"
             "منطقه مورد نظر خود را انتخاب کنید:",
             parse_mode="Markdown",
-            reply_markup=BROWSE_AREA_KB,
+            reply_markup=_browse_area_kb(),
         )
         return BROWSE_AREA
 
-    if text not in BUDGET_MAP:
-        await update.message.reply_text(
-            "لطفاً یکی از گزینه‌های موجود را انتخاب کنید:",
-            reply_markup=BROWSE_BUDGET_KB,
-        )
-        return BROWSE_BUDGET
-
-    min_price, max_price = BUDGET_MAP[text]
-    browse = context.user_data.get("browse", {})
+    idx                    = int(query.data.split("_")[-1])
+    label, min_price, max_price = BUDGETS[idx]
+    browse     = context.user_data.get("browse", {})
     area_type  = browse.get("area_type", "")
-    area_label = browse.get("area_label", area_type)
 
-    await update.message.reply_text("🔍 در حال جستجو...", reply_markup=ReplyKeyboardRemove())
+    await query.edit_message_text("🔍 در حال جستجو...")
 
     results = search_villas(
         area_type=area_type,
@@ -268,14 +254,11 @@ async def handle_browse_budget(update: Update, context: ContextTypes.DEFAULT_TYP
         max_price=max_price,
     )
 
-    main_kb = get_main_keyboard(update.effective_user.id)
-
     if not results:
-        await update.message.reply_text(
+        await query.edit_message_text(
             "😔 *ویلایی با این مشخصات یافت نشد.*\n\n"
             "می‌توانید با بازه قیمتی یا منطقه دیگری جستجو کنید.",
             parse_mode="Markdown",
-            reply_markup=main_kb,
         )
         context.user_data.pop("browse", None)
         return ConversationHandler.END
@@ -284,12 +267,11 @@ async def handle_browse_budget(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data["browse_idx"]     = 0
 
     region_name = "ساحلی" if area_type == "ساحلی" else "جنگلی"
-    await update.message.reply_text(
+    await query.edit_message_text(
         f"✅ *{len(results)} ویلا* در منطقه {region_name} یافت شد:",
         parse_mode="Markdown",
-        reply_markup=main_kb,
     )
-    await _send_villa_card(update.effective_chat.id, context, results[0], 0, len(results))
+    await _send_villa_card(query.message.chat_id, context, results[0], 0, len(results))
     return ConversationHandler.END
 
 # ── Cancel ────────────────────────────────────────────────────────────────────
@@ -363,8 +345,8 @@ def build_browse_conv() -> ConversationHandler:
             MessageHandler(filters.Regex("^🔍 جستجو ویلا$"), start_browse),
         ],
         states={
-            BROWSE_AREA:   [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_browse_area)],
-            BROWSE_BUDGET: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_browse_budget)],
+            BROWSE_AREA:   [CallbackQueryHandler(handle_browse_area,   pattern="^browse_area_")],
+            BROWSE_BUDGET: [CallbackQueryHandler(handle_browse_budget, pattern="^browse_budget_")],
         },
         fallbacks=[
             CommandHandler("cancel", cancel_browse),
