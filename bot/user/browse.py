@@ -17,7 +17,7 @@ from pg_villas import search_villas, get_villa_by_id
 from keyboards import get_main_keyboard
 from states import BROWSE_AREA, BROWSE_BUDGET
 from utils import fmt_price, price_category
-from database import is_favorite, add_favorite, remove_favorite
+from database import is_favorite, add_favorite, remove_favorite, is_in_compare, add_compare, remove_compare
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -149,17 +149,28 @@ def _villa_full_detail(villa: dict) -> str:
     return text
 
 
-def _villa_inline_kb(villa_id: int, idx: int, total: int, is_fav: bool = False) -> InlineKeyboardMarkup:
+def _villa_inline_kb(
+    villa_id: int,
+    idx: int,
+    total: int,
+    is_fav: bool = False,
+    is_cmp: bool = False,
+) -> InlineKeyboardMarkup:
     has_next   = idx + 1 < total
     next_label = f"➡️ بعدی  ({idx + 1}/{total})" if has_next else f"✅ آخرین  ({total}/{total})"
     fav_label  = "💔 حذف از علاقه‌مندی‌ها" if is_fav else "❤️ افزودن به علاقه‌مندی‌ها"
     fav_data   = f"fav_remove_{villa_id}" if is_fav else f"fav_add_{villa_id}"
+    cmp_label  = "✅ حذف از مقایسه" if is_cmp else "⚖️ افزودن برای مقایسه"
+    cmp_data   = f"cmp_remove_{villa_id}" if is_cmp else f"cmp_add_{villa_id}"
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📋 مشخصات کامل",   callback_data=f"browse_detail_{villa_id}"),
+            InlineKeyboardButton("📋 مشخصات کامل", callback_data=f"browse_detail_{villa_id}"),
         ],
         [
             InlineKeyboardButton(fav_label, callback_data=fav_data),
+        ],
+        [
+            InlineKeyboardButton(cmp_label, callback_data=cmp_data),
         ],
         [
             InlineKeyboardButton("☎️ درخواست بازدید", callback_data=f"browse_visit_{villa_id}"),
@@ -177,8 +188,9 @@ async def _send_villa_card(
     user_id: int = 0,
 ) -> None:
     text   = _villa_card(villa, idx, total)
-    fav    = is_favorite(user_id, villa["id"]) if user_id else False
-    kb     = _villa_inline_kb(villa["id"], idx, total, is_fav=fav)
+    fav    = is_favorite(user_id, villa["id"])   if user_id else False
+    cmp    = is_in_compare(user_id, villa["id"]) if user_id else False
+    kb     = _villa_inline_kb(villa["id"], idx, total, is_fav=fav, is_cmp=cmp)
     photos = _photos_list(villa)
 
     if photos:
@@ -381,8 +393,43 @@ async def cb_fav_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     results = context.user_data.get("browse_results", [])
     idx     = context.user_data.get("browse_idx", 0)
     total   = len(results) if results else 1
+    is_cmp  = is_in_compare(user_id, villa_id)
 
-    new_kb = _villa_inline_kb(villa_id, idx, total, is_fav=is_fav)
+    new_kb = _villa_inline_kb(villa_id, idx, total, is_fav=is_fav, is_cmp=is_cmp)
+    try:
+        await query.edit_message_reply_markup(reply_markup=new_kb)
+    except Exception:
+        pass
+
+
+async def cb_cmp_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query    = update.callback_query
+    user_id  = query.from_user.id
+    data     = query.data
+    villa_id = int(data.split("_")[-1])
+
+    if data.startswith("cmp_add_"):
+        added = add_compare(user_id, villa_id)
+        if added:
+            is_cmp = True
+            await query.answer("⚖️ اضافه شد به لیست مقایسه")
+        else:
+            await query.answer(
+                "⚠️ حداکثر ۳ ویلا را می‌توانید مقایسه کنید.",
+                show_alert=True,
+            )
+            return
+    else:
+        remove_compare(user_id, villa_id)
+        is_cmp = False
+        await query.answer("✅ حذف شد از لیست مقایسه")
+
+    results = context.user_data.get("browse_results", [])
+    idx     = context.user_data.get("browse_idx", 0)
+    total   = len(results) if results else 1
+    is_fav  = is_favorite(user_id, villa_id)
+
+    new_kb = _villa_inline_kb(villa_id, idx, total, is_fav=is_fav, is_cmp=is_cmp)
     try:
         await query.edit_message_reply_markup(reply_markup=new_kb)
     except Exception:
@@ -395,4 +442,6 @@ def browse_callback_handlers() -> list:
         CallbackQueryHandler(cb_browse_detail, pattern="^browse_detail_"),
         CallbackQueryHandler(cb_fav_toggle,    pattern="^fav_add_"),
         CallbackQueryHandler(cb_fav_toggle,    pattern="^fav_remove_"),
+        CallbackQueryHandler(cb_cmp_toggle,    pattern="^cmp_add_"),
+        CallbackQueryHandler(cb_cmp_toggle,    pattern="^cmp_remove_"),
     ]

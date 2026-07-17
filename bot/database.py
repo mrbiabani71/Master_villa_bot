@@ -80,7 +80,17 @@ def init_db() -> None:
                 villa_id   INTEGER NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 UNIQUE(user_id, villa_id)
-            );
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS compare_list (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL,
+                villa_id   INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(user_id, villa_id)
+            )
         """)
 
         conn.commit()
@@ -302,3 +312,56 @@ def get_user_favorites(user_id: int) -> list[int]:
             (user_id,),
         ).fetchall()
         return [row["villa_id"] for row in rows]
+
+
+# ── Compare queries ────────────────────────────────────────────────────────────
+
+def add_compare(user_id: int, villa_id: int) -> bool:
+    """Add villa to compare list. Returns False if already at 3-villa limit."""
+    with get_connection() as conn:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM compare_list WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()[0]
+        if count >= 3:
+            return False
+        conn.execute(
+            "INSERT OR IGNORE INTO compare_list (user_id, villa_id) VALUES (?, ?)",
+            (user_id, villa_id),
+        )
+        conn.commit()
+        return True
+
+
+def remove_compare(user_id: int, villa_id: int) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "DELETE FROM compare_list WHERE user_id = ? AND villa_id = ?",
+            (user_id, villa_id),
+        )
+        conn.commit()
+
+
+def is_in_compare(user_id: int, villa_id: int) -> bool:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM compare_list WHERE user_id = ? AND villa_id = ?",
+            (user_id, villa_id),
+        ).fetchone()
+        return row is not None
+
+
+def get_user_compare(user_id: int) -> list[int]:
+    """Return villa_ids in compare list, oldest first."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT villa_id FROM compare_list WHERE user_id = ? ORDER BY created_at ASC",
+            (user_id,),
+        ).fetchall()
+        return [row["villa_id"] for row in rows]
+
+
+def clear_compare(user_id: int) -> None:
+    with get_connection() as conn:
+        conn.execute("DELETE FROM compare_list WHERE user_id = ?", (user_id,))
+        conn.commit()

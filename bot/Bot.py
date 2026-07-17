@@ -32,6 +32,7 @@ from user.visit import build_visit_conv, visit_callback_handlers
 from user.consultation import build_consultation_conv
 from user.faq import show_faq_menu, faq_callback_handlers
 from user.favorites import show_favorites
+from user.compare import show_compare, cb_clear_compare
 from channel_importer import channel_import_handler
 
 FAQ_TEXT = (
@@ -89,6 +90,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == "❤️ علاقه‌مندی‌ها":
         await show_favorites(update, context)
+
+    elif text == "⚖️ مقایسه ویلاها":
+        await show_compare(update, context)
 
     elif text == "❓ سوالات پرتکرار":
         await show_faq_menu(update, context)
@@ -190,8 +194,9 @@ app.add_handler(CallbackQueryHandler(cb_req_contact, pattern="^req_contact_"))
 app.add_handler(CallbackQueryHandler(cb_req_delete,  pattern="^req_del_"))
 
 # ── Inline callbacks: channel import panel ────────────────────────────────────
-app.add_handler(CallbackQueryHandler(cb_import_confirm, pattern="^ch_import_confirm$"))
-app.add_handler(CallbackQueryHandler(cb_import_cancel,  pattern="^ch_import_cancel$"))
+app.add_handler(CallbackQueryHandler(cb_import_confirm,  pattern="^ch_import_confirm$"))
+app.add_handler(CallbackQueryHandler(cb_import_cancel,   pattern="^ch_import_cancel$"))
+app.add_handler(CallbackQueryHandler(cb_clear_compare,   pattern="^cmp_clear$"))
 # Note: ch_edit_fail_* is handled as a ConversationHandler entry point in
 # build_smart_import_conv() — no separate registration needed here.
 
