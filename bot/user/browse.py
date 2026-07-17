@@ -17,7 +17,7 @@ from pg_villas import search_villas, get_villa_by_id
 from keyboards import get_main_keyboard
 from states import BROWSE_AREA, BROWSE_BUDGET
 from utils import fmt_price, price_category
-from database import is_favorite, add_favorite, remove_favorite, is_in_compare, add_compare, remove_compare
+from database import is_favorite, add_favorite, remove_favorite, is_in_compare, add_compare, remove_compare, get_user_compare
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -155,6 +155,7 @@ def _villa_inline_kb(
     total: int,
     is_fav: bool = False,
     is_cmp: bool = False,
+    cmp_count: int = 0,
 ) -> InlineKeyboardMarkup:
     has_next   = idx + 1 < total
     next_label = f"➡️ بعدی  ({idx + 1}/{total})" if has_next else f"✅ آخرین  ({total}/{total})"
@@ -162,21 +163,24 @@ def _villa_inline_kb(
     fav_data   = f"fav_remove_{villa_id}" if is_fav else f"fav_add_{villa_id}"
     cmp_label  = "✅ حذف از مقایسه" if is_cmp else "⚖️ افزودن برای مقایسه"
     cmp_data   = f"cmp_remove_{villa_id}" if is_cmp else f"cmp_add_{villa_id}"
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("📋 مشخصات کامل", callback_data=f"browse_detail_{villa_id}"),
-        ],
-        [
-            InlineKeyboardButton(fav_label, callback_data=fav_data),
-        ],
-        [
-            InlineKeyboardButton(cmp_label, callback_data=cmp_data),
-        ],
-        [
-            InlineKeyboardButton("☎️ درخواست بازدید", callback_data=f"browse_visit_{villa_id}"),
-            InlineKeyboardButton(next_label,            callback_data="browse_next"),
-        ],
+
+    rows = [
+        [InlineKeyboardButton("📋 مشخصات کامل", callback_data=f"browse_detail_{villa_id}")],
+        [InlineKeyboardButton(fav_label, callback_data=fav_data)],
+        [InlineKeyboardButton(cmp_label, callback_data=cmp_data)],
+    ]
+
+    if cmp_count >= 2:
+        rows.append([
+            InlineKeyboardButton("📊 نمایش مقایسه", callback_data="cmp_view"),
+        ])
+
+    rows.append([
+        InlineKeyboardButton("☎️ درخواست بازدید", callback_data=f"browse_visit_{villa_id}"),
+        InlineKeyboardButton(next_label,            callback_data="browse_next"),
     ])
+
+    return InlineKeyboardMarkup(rows)
 
 
 async def _send_villa_card(
@@ -187,10 +191,11 @@ async def _send_villa_card(
     total: int,
     user_id: int = 0,
 ) -> None:
-    text   = _villa_card(villa, idx, total)
-    fav    = is_favorite(user_id, villa["id"])   if user_id else False
-    cmp    = is_in_compare(user_id, villa["id"]) if user_id else False
-    kb     = _villa_inline_kb(villa["id"], idx, total, is_fav=fav, is_cmp=cmp)
+    text      = _villa_card(villa, idx, total)
+    fav       = is_favorite(user_id, villa["id"])   if user_id else False
+    cmp       = is_in_compare(user_id, villa["id"]) if user_id else False
+    cmp_count = len(get_user_compare(user_id))      if user_id else 0
+    kb        = _villa_inline_kb(villa["id"], idx, total, is_fav=fav, is_cmp=cmp, cmp_count=cmp_count)
     photos = _photos_list(villa)
 
     if photos:
@@ -390,12 +395,13 @@ async def cb_fav_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         is_fav = False
         await query.answer("💔 حذف شد از علاقه‌مندی‌ها")
 
-    results = context.user_data.get("browse_results", [])
-    idx     = context.user_data.get("browse_idx", 0)
-    total   = len(results) if results else 1
-    is_cmp  = is_in_compare(user_id, villa_id)
+    results   = context.user_data.get("browse_results", [])
+    idx       = context.user_data.get("browse_idx", 0)
+    total     = len(results) if results else 1
+    is_cmp    = is_in_compare(user_id, villa_id)
+    cmp_count = len(get_user_compare(user_id))
 
-    new_kb = _villa_inline_kb(villa_id, idx, total, is_fav=is_fav, is_cmp=is_cmp)
+    new_kb = _villa_inline_kb(villa_id, idx, total, is_fav=is_fav, is_cmp=is_cmp, cmp_count=cmp_count)
     try:
         await query.edit_message_reply_markup(reply_markup=new_kb)
     except Exception:
@@ -424,12 +430,13 @@ async def cb_cmp_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         is_cmp = False
         await query.answer("✅ حذف شد از لیست مقایسه")
 
-    results = context.user_data.get("browse_results", [])
-    idx     = context.user_data.get("browse_idx", 0)
-    total   = len(results) if results else 1
-    is_fav  = is_favorite(user_id, villa_id)
+    results   = context.user_data.get("browse_results", [])
+    idx       = context.user_data.get("browse_idx", 0)
+    total     = len(results) if results else 1
+    is_fav    = is_favorite(user_id, villa_id)
+    cmp_count = len(get_user_compare(user_id))
 
-    new_kb = _villa_inline_kb(villa_id, idx, total, is_fav=is_fav, is_cmp=is_cmp)
+    new_kb = _villa_inline_kb(villa_id, idx, total, is_fav=is_fav, is_cmp=is_cmp, cmp_count=cmp_count)
     try:
         await query.edit_message_reply_markup(reply_markup=new_kb)
     except Exception:
