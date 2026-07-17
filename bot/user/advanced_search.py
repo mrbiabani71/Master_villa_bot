@@ -298,7 +298,7 @@ async def handle_adv_price(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 # ── Step 4: optional filters (inline) → search ────────────────────────────────
 
-async def _run_search(context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> None:
+async def _run_search(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int = 0) -> None:
     """Execute the search and post results. Sends new messages only at this point."""
     adv = context.user_data.get("adv", {})
     f   = context.user_data.get("adv_filters", dict(DEFAULT_FILTERS))
@@ -339,7 +339,7 @@ async def _run_search(context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> None:
         text=f"✅ *{len(results)} ویلا* در منطقه {region_name} ({city_name}) یافت شد:",
         parse_mode="Markdown",
     )
-    await _send_villa_card(chat_id, context, results[0], 0, len(results))
+    await _send_villa_card(chat_id, context, results[0], 0, len(results), user_id)
 
 
 async def cb_adv_filters(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -380,7 +380,7 @@ async def cb_adv_filters(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     elif data == "advf_search":
         # Remove buttons from the search-menu message, then post results below it
         await query.edit_message_text("🔍 در حال جستجو...")
-        await _run_search(context, query.message.chat_id)
+        await _run_search(context, query.message.chat_id, query.from_user.id)
         context.user_data.pop("adv", None)
         context.user_data.pop("adv_filters", None)
         return ConversationHandler.END
@@ -416,7 +416,7 @@ async def _finish_smart_search(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data["adv_filters"] = f
 
     await update.message.reply_text("🔍 در حال جستجو...")
-    await _run_search(context, update.effective_chat.id)
+    await _run_search(context, update.effective_chat.id, update.effective_user.id)
 
     context.user_data.pop("adv",         None)
     context.user_data.pop("adv_filters", None)
@@ -483,7 +483,7 @@ async def handle_smart_ask_region(update: Update, context: ContextTypes.DEFAULT_
     context.user_data["adv"]         = adv
     context.user_data["adv_filters"] = f
     await query.edit_message_text("🔍 در حال جستجو...")
-    await _run_search(context, query.message.chat_id)
+    await _run_search(context, query.message.chat_id, query.from_user.id)
     context.user_data.pop("adv",         None)
     context.user_data.pop("adv_filters", None)
     context.user_data.pop("smart",       None)

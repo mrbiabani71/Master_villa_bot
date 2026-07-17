@@ -31,6 +31,7 @@ from user.advanced_search import build_advanced_search_conv
 from user.visit import build_visit_conv, visit_callback_handlers
 from user.consultation import build_consultation_conv
 from user.faq import show_faq_menu, faq_callback_handlers
+from user.favorites import show_favorites
 from channel_importer import channel_import_handler
 
 FAQ_TEXT = (
@@ -86,7 +87,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
-    if text == "❓ سوالات پرتکرار":
+    if text == "❤️ علاقه‌مندی‌ها":
+        await show_favorites(update, context)
+
+    elif text == "❓ سوالات پرتکرار":
         await show_faq_menu(update, context)
 
     elif text == "ℹ️ درباره ما":

@@ -17,6 +17,7 @@ from pg_villas import search_villas, get_villa_by_id
 from keyboards import get_main_keyboard
 from states import BROWSE_AREA, BROWSE_BUDGET
 from utils import fmt_price, price_category
+from database import is_favorite, add_favorite, remove_favorite
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -148,12 +149,17 @@ def _villa_full_detail(villa: dict) -> str:
     return text
 
 
-def _villa_inline_kb(villa_id: int, idx: int, total: int) -> InlineKeyboardMarkup:
+def _villa_inline_kb(villa_id: int, idx: int, total: int, is_fav: bool = False) -> InlineKeyboardMarkup:
     has_next   = idx + 1 < total
     next_label = f"➡️ بعدی  ({idx + 1}/{total})" if has_next else f"✅ آخرین  ({total}/{total})"
+    fav_label  = "💔 حذف از علاقه‌مندی‌ها" if is_fav else "❤️ افزودن به علاقه‌مندی‌ها"
+    fav_data   = f"fav_remove_{villa_id}" if is_fav else f"fav_add_{villa_id}"
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📋 مشخصات کامل",   callback_data=f"browse_detail_{villa_id}"),
+        ],
+        [
+            InlineKeyboardButton(fav_label, callback_data=fav_data),
         ],
         [
             InlineKeyboardButton("☎️ درخواست بازدید", callback_data=f"browse_visit_{villa_id}"),
@@ -168,9 +174,11 @@ async def _send_villa_card(
     villa: dict,
     idx: int,
     total: int,
+    user_id: int = 0,
 ) -> None:
     text   = _villa_card(villa, idx, total)
-    kb     = _villa_inline_kb(villa["id"], idx, total)
+    fav    = is_favorite(user_id, villa["id"]) if user_id else False
+    kb     = _villa_inline_kb(villa["id"], idx, total, is_fav=fav)
     photos = _photos_list(villa)
 
     if photos:
@@ -271,7 +279,7 @@ async def handle_browse_budget(update: Update, context: ContextTypes.DEFAULT_TYP
         f"✅ *{len(results)} ویلا* در منطقه {region_name} یافت شد:",
         parse_mode="Markdown",
     )
-    await _send_villa_card(query.message.chat_id, context, results[0], 0, len(results))
+    await _send_villa_card(query.message.chat_id, context, results[0], 0, len(results), query.from_user.id)
     return ConversationHandler.END
 
 # ── Cancel ────────────────────────────────────────────────────────────────────
@@ -297,7 +305,7 @@ async def cb_browse_next(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     await query.answer()
     context.user_data["browse_idx"] = idx
-    await _send_villa_card(query.message.chat_id, context, results[idx], idx, len(results))
+    await _send_villa_card(query.message.chat_id, context, results[idx], idx, len(results), query.from_user.id)
 
 
 async def cb_browse_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -355,8 +363,36 @@ def build_browse_conv() -> ConversationHandler:
     )
 
 
+async def cb_fav_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query    = update.callback_query
+    user_id  = query.from_user.id
+    data     = query.data
+    villa_id = int(data.split("_")[-1])
+
+    if data.startswith("fav_add_"):
+        add_favorite(user_id, villa_id)
+        is_fav = True
+        await query.answer("❤️ اضافه شد به علاقه‌مندی‌ها")
+    else:
+        remove_favorite(user_id, villa_id)
+        is_fav = False
+        await query.answer("💔 حذف شد از علاقه‌مندی‌ها")
+
+    results = context.user_data.get("browse_results", [])
+    idx     = context.user_data.get("browse_idx", 0)
+    total   = len(results) if results else 1
+
+    new_kb = _villa_inline_kb(villa_id, idx, total, is_fav=is_fav)
+    try:
+        await query.edit_message_reply_markup(reply_markup=new_kb)
+    except Exception:
+        pass
+
+
 def browse_callback_handlers() -> list:
     return [
         CallbackQueryHandler(cb_browse_next,   pattern="^browse_next$"),
         CallbackQueryHandler(cb_browse_detail, pattern="^browse_detail_"),
+        CallbackQueryHandler(cb_fav_toggle,    pattern="^fav_add_"),
+        CallbackQueryHandler(cb_fav_toggle,    pattern="^fav_remove_"),
     ]

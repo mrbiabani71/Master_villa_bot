@@ -73,6 +73,16 @@ def init_db() -> None:
         _add_column_if_missing(conn, "visit_requests", "request_type", "TEXT DEFAULT 'visit'")
         _add_column_if_missing(conn, "visit_requests", "status",       "TEXT DEFAULT 'pending'")
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS favorites (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL,
+                villa_id   INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(user_id, villa_id)
+            );
+        """)
+
         conn.commit()
 
 
@@ -253,3 +263,42 @@ def delete_request(req_id: int) -> None:
     with get_connection() as conn:
         conn.execute("DELETE FROM visit_requests WHERE id = ?", (req_id,))
         conn.commit()
+
+
+# ── Favorites queries ──────────────────────────────────────────────────────────
+
+def add_favorite(user_id: int, villa_id: int) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO favorites (user_id, villa_id) VALUES (?, ?)",
+            (user_id, villa_id),
+        )
+        conn.commit()
+
+
+def remove_favorite(user_id: int, villa_id: int) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "DELETE FROM favorites WHERE user_id = ? AND villa_id = ?",
+            (user_id, villa_id),
+        )
+        conn.commit()
+
+
+def is_favorite(user_id: int, villa_id: int) -> bool:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM favorites WHERE user_id = ? AND villa_id = ?",
+            (user_id, villa_id),
+        ).fetchone()
+        return row is not None
+
+
+def get_user_favorites(user_id: int) -> list[int]:
+    """Return villa_ids saved by user, most recently added first."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT villa_id FROM favorites WHERE user_id = ? ORDER BY created_at DESC",
+            (user_id,),
+        ).fetchall()
+        return [row["villa_id"] for row in rows]
