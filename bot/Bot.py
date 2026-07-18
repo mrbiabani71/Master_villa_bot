@@ -33,6 +33,7 @@ from user.consultation import build_consultation_conv
 from user.faq import show_faq_menu, faq_callback_handlers
 from user.favorites import show_favorites
 from user.compare import show_compare, cb_show_compare, cb_clear_compare
+from user.notify_prefs import build_notify_prefs_conv, cb_notif_disable
 from channel_importer import channel_import_handler
 
 FAQ_TEXT = (
@@ -93,6 +94,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "⚖️ مقایسه ویلاها":
         await show_compare(update, context)
+
+    elif text == "🔔 اعلان ویلاهای جدید":
+        # Handled by the ConversationHandler — this branch is a safety fallback.
+        pass
 
     elif text == "❓ سوالات پرتکرار":
         await show_faq_menu(update, context)
@@ -175,6 +180,7 @@ app.add_handler(build_visit_conv())   # must precede browse callbacks (intercept
 # point is superseded but its card-rendering callbacks are still reused below.
 app.add_handler(build_advanced_search_conv())
 app.add_handler(build_browse_conv())
+app.add_handler(build_notify_prefs_conv())
 
 # ── Inline callbacks: FAQ ─────────────────────────────────────────────────────
 for handler in faq_callback_handlers():
@@ -198,6 +204,7 @@ app.add_handler(CallbackQueryHandler(cb_import_confirm,  pattern="^ch_import_con
 app.add_handler(CallbackQueryHandler(cb_import_cancel,   pattern="^ch_import_cancel$"))
 app.add_handler(CallbackQueryHandler(cb_show_compare,    pattern="^cmp_view$"))
 app.add_handler(CallbackQueryHandler(cb_clear_compare,   pattern="^cmp_clear$"))
+app.add_handler(CallbackQueryHandler(cb_notif_disable,   pattern="^notif_disable$"))
 # Note: ch_edit_fail_* is handled as a ConversationHandler entry point in
 # build_smart_import_conv() — no separate registration needed here.
 

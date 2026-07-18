@@ -23,6 +23,7 @@ from telegram.ext import (
     filters,
 )
 
+import asyncio
 import logging
 
 from config import ADMIN_ID
@@ -31,6 +32,7 @@ from smart_import.parser import parse_villa_text
 from smart_import.importer import import_villa
 from smart_import.models import VillaData
 from states import SI_WAITING_TEXT, SI_PREVIEW, SI_EDIT_FIELD, SI_EDIT_VALUE, SI_PHOTOS
+from notifications import dispatch_new_villa_notification
 
 logger = logging.getLogger(__name__)
 
@@ -356,6 +358,7 @@ async def handle_si_save(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             parse_mode="Markdown",
             reply_markup=get_main_keyboard(update.effective_user.id),
         )
+        asyncio.create_task(dispatch_new_villa_notification(context.bot, result.villa_id))
     else:
         await update.message.reply_text(
             f"❌ خطا در ذخیره:\n{result.error}",

@@ -24,3 +24,6 @@ SEARCH_MENU = 40
 
 # ── User: smart search (rule-based parser) states ────────────────────────────────
 SMART_TEXT, SMART_ASK_REGION, SMART_ASK_PRICE = range(41, 44)
+
+# ── User: notification preferences states ─────────────────────────────────────
+NP_REGION, NP_PRICE, NP_TYPE = range(44, 47)

@@ -93,6 +93,19 @@ def init_db() -> None:
             )
         """)
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS notification_prefs (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER UNIQUE NOT NULL,
+                area_type  TEXT,
+                min_price  REAL,
+                max_price  REAL,
+                villa_type TEXT,
+                active     INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+
         conn.commit()
 
 
@@ -364,4 +377,57 @@ def get_user_compare(user_id: int) -> list[int]:
 def clear_compare(user_id: int) -> None:
     with get_connection() as conn:
         conn.execute("DELETE FROM compare_list WHERE user_id = ?", (user_id,))
+        conn.commit()
+
+
+# ── Notification preferences ───────────────────────────────────────────────────
+
+def save_notification_prefs(
+    user_id: int,
+    area_type: str | None,
+    min_price: float | None,
+    max_price: float | None,
+    villa_type: str | None,
+) -> None:
+    """Upsert: creates a new row or replaces existing one for this user."""
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO notification_prefs (user_id, area_type, min_price, max_price, villa_type, active)
+            VALUES (?, ?, ?, ?, ?, 1)
+            ON CONFLICT(user_id) DO UPDATE SET
+                area_type  = excluded.area_type,
+                min_price  = excluded.min_price,
+                max_price  = excluded.max_price,
+                villa_type = excluded.villa_type,
+                active     = 1
+            """,
+            (user_id, area_type, min_price, max_price, villa_type),
+        )
+        conn.commit()
+
+
+def get_notification_prefs(user_id: int) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM notification_prefs WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def get_all_active_prefs() -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM notification_prefs WHERE active = 1"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def deactivate_notification_prefs(user_id: int) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE notification_prefs SET active = 0 WHERE user_id = ?",
+            (user_id,),
+        )
         conn.commit()

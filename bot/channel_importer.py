@@ -44,6 +44,7 @@ from telegram.ext import ContextTypes, MessageHandler, filters
 from config import ADMIN_ID, CHANNEL_ID
 from smart_import.parser import parse_villa_text
 from smart_import.importer import import_villa_from_channel
+from notifications import dispatch_new_villa_notification
 
 logger = logging.getLogger(__name__)
 
@@ -295,6 +296,8 @@ async def _save_villa(
             "CHANNEL_IMPORT | %s villa %s (id=%s, msg_id=%s, photos=%d)",
             result.mode, result.villa_code, result.villa_id, message_id, len(photo_ids),
         )
+        if result.mode == "create":
+            asyncio.create_task(dispatch_new_villa_notification(bot, result.villa_id))
     else:
         reason = result.error or "خطای ناشناخته در ذخیره‌سازی"
         logger.error(
