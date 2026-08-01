@@ -16,7 +16,7 @@ from telegram.ext import (
 from pg_villas import search_villas, get_villa_by_id
 from keyboards import get_main_keyboard
 from states import BROWSE_AREA, BROWSE_BUDGET
-from utils import fmt_price, price_category
+from utils import fmt_price, fmt_size, price_category
 from database import is_favorite, add_favorite, remove_favorite, is_in_compare, add_compare, remove_compare, get_user_compare
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -72,80 +72,71 @@ def _feature_parts(villa: dict) -> list[str]:
 
 
 def _villa_card(villa: dict, idx: int, total: int) -> str:
-    features      = _feature_parts(villa)
-    features_line = "  |  ".join(features) if features else "—"
+    features = _feature_parts(villa)
+    price    = fmt_price(villa.get("price"))
+    category = price_category(villa.get("price"))
 
     raw_desc = (villa.get("description") or "").strip()
     desc     = raw_desc[:160] + ("..." if len(raw_desc) > 160 else "")
 
-    price    = fmt_price(villa.get("price"))
-    category = price_category(villa.get("price"))
-
-    return (
-        f"🏡 *ویلا {villa['villa_code']}*   _({idx + 1} از {total})_\n"
-        f"\n"
-        f"📍 {villa.get('city', '—')}  ·  🌊 {villa.get('area_type', '—')}  ·  🏠 {_villa_type(villa)}\n"
-        f"💰 {price}   {category}\n"
-        f"\n"
-        f"📐 زمین: {villa.get('land_size', '—')} م²   بنا: {villa.get('building_size', '—')} م²   🛏 {villa.get('bedrooms', '—')} خواب\n"
-        f"✨ {features_line}\n"
-        f"\n"
-        f"📝 _{desc}_"
-    )
+    lines = [
+        f"🏡 *ویلا {villa['villa_code']}*   _({idx + 1} از {total})_",
+        "",
+        f"📍 {villa.get('city', '—')}  ·  🌊 {villa.get('area_type', '—')}  ·  🏠 {_villa_type(villa)}",
+        f"💰 {price}   {category}",
+        "",
+        f"📐 زمین: {fmt_size(villa.get('land_size'))} م²   بنا: {fmt_size(villa.get('building_size'))} م²   🛏 {villa.get('bedrooms', '—')} خواب",
+    ]
+    if features:
+        lines.append("✨ " + "  |  ".join(features))
+    if desc:
+        lines += ["", f"📝 _{desc}_"]
+    return "\n".join(lines)
 
 
 def _villa_full_detail(villa: dict) -> str:
     features = _feature_parts(villa)
-    features_block = "\n".join(f"  ✅ {f}" for f in features) if features else "  —"
+    photos   = _photos_list(villa)
+    desc     = (villa.get("description") or "").strip()
 
-    photos    = _photos_list(villa)
-    has_video = "✅ دارد" if villa.get("video") else "❌ ندارد"
-    has_loc   = "✅ دارد" if villa.get("latitude") is not None else "❌ ندارد"
+    def _build(desc_text: str) -> str:
+        lines = [
+            f"📋 *مشخصات کامل — ویلا {villa['villa_code']}*",
+            "",
+            f"🏙 شهر: {villa.get('city', '—')}",
+            f"🌊 منطقه: {villa.get('area_type', '—')}",
+            f"🏡 نوع: {_villa_type(villa)}",
+        ]
+        if villa.get("document_type"):
+            lines.append(f"📄 سند: {villa['document_type']}")
+        lines += [
+            f"💰 قیمت: {fmt_price(villa.get('price'))}   {price_category(villa.get('price'))}",
+            "",
+            f"📐 متراژ زمین: {fmt_size(villa.get('land_size'))} متر مربع",
+            f"🏗 متراژ بنا: {fmt_size(villa.get('building_size'))} متر مربع",
+            f"🛏 تعداد اتاق: {villa.get('bedrooms', '—')}",
+        ]
+        if features:
+            lines += ["", "✨ امکانات:"]
+            lines += [f"  ✅ {f}" for f in features]
+        # Only show media/location lines that actually exist
+        media_parts = []
+        if photos:
+            media_parts.append(f"🖼 {len(photos)} تصویر")
+        if villa.get("video"):
+            media_parts.append("🎥 ویدیو")
+        if villa.get("latitude") is not None:
+            media_parts.append("📍 موقعیت روی نقشه")
+        if media_parts:
+            lines += ["", "  |  ".join(media_parts)]
+        if desc_text:
+            lines += ["", "📝 توضیحات:", desc_text]
+        return "\n".join(lines)
 
-    desc = (villa.get("description") or "—").strip()
-
-    text = (
-        f"📋 *مشخصات کامل — ویلا {villa['villa_code']}*\n"
-        f"\n"
-        f"🏙 شهر: {villa.get('city', '—')}\n"
-        f"🌊 منطقه: {villa.get('area_type', '—')}\n"
-        f"🏡 نوع: {_villa_type(villa)}\n"
-        f"📄 سند: {villa.get('document_type', '—')}\n"
-        f"💰 قیمت: {fmt_price(villa.get('price'))}   {price_category(villa.get('price'))}\n"
-        f"\n"
-        f"📐 متراژ زمین: {villa.get('land_size', '—')} متر مربع\n"
-        f"🏗 متراژ بنا: {villa.get('building_size', '—')} متر مربع\n"
-        f"🛏 تعداد اتاق: {villa.get('bedrooms', '—')}\n"
-        f"\n"
-        f"✨ امکانات:\n{features_block}\n"
-        f"\n"
-        f"🖼 تصاویر: {len(photos)} عکس  ·  🎥 ویدیو: {has_video}  ·  📍 موقعیت: {has_loc}\n"
-        f"\n"
-        f"📝 توضیحات:\n{desc}"
-    )
-
+    text = _build(desc)
     if len(text) > 4000:
         overflow = len(text) - 4000
-        desc = desc[: max(0, len(desc) - overflow - 3)] + "..."
-        text = (
-            f"📋 *مشخصات کامل — ویلا {villa['villa_code']}*\n"
-            f"\n"
-            f"🏙 شهر: {villa.get('city', '—')}\n"
-            f"🌊 منطقه: {villa.get('area_type', '—')}\n"
-            f"🏡 نوع: {_villa_type(villa)}\n"
-            f"📄 سند: {villa.get('document_type', '—')}\n"
-            f"💰 قیمت: {fmt_price(villa.get('price'))}\n"
-            f"\n"
-            f"📐 متراژ زمین: {villa.get('land_size', '—')} متر مربع\n"
-            f"🏗 متراژ بنا: {villa.get('building_size', '—')} متر مربع\n"
-            f"🛏 تعداد اتاق: {villa.get('bedrooms', '—')}\n"
-            f"\n"
-            f"✨ امکانات:\n{features_block}\n"
-            f"\n"
-            f"🖼 تصاویر: {len(photos)} عکس  ·  🎥 ویدیو: {has_video}  ·  📍 موقعیت: {has_loc}\n"
-            f"\n"
-            f"📝 توضیحات:\n{desc}"
-        )
+        text = _build(desc[: max(0, len(desc) - overflow - 3)] + "...")
     return text
 
 

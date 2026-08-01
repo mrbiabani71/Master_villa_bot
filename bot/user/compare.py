@@ -3,14 +3,10 @@ from telegram.ext import ContextTypes
 
 from database import get_user_compare, clear_compare
 from pg_villas import get_villa_by_id
-from utils import fmt_price
+from utils import fmt_price, fmt_size
 
 
 # ── Formatting helpers ─────────────────────────────────────────────────────────
-
-def _yn(val) -> str:
-    return "✅" if val else "❌"
-
 
 def _amenities(villa: dict) -> str:
     parts = []
@@ -47,8 +43,8 @@ def _build_compare_text(villas: list[dict]) -> str:
     sections.append("─" * 26)
 
     # Dimensions
-    sections.append(_row("📐 *زمین:*",  [str(v.get("land_size") or "—") + " م²"     for v in villas]))
-    sections.append(_row("🏗 *بنا:*",   [str(v.get("building_size") or "—") + " م²" for v in villas]))
+    sections.append(_row("📐 *زمین:*",  [fmt_size(v.get("land_size"))    + " م²" for v in villas]))
+    sections.append(_row("🏗 *بنا:*",   [fmt_size(v.get("building_size")) + " م²" for v in villas]))
     sections.append(_row("🛏 *اتاق:*",  vals("bedrooms")))
 
     sections.append("─" * 26)

@@ -1,3 +1,11 @@
+def fmt_size(val) -> str:
+    """Format a numeric size, stripping trailing .0: 250.0 → '250', 123.5 → '123.5'."""
+    if val is None:
+        return "—"
+    f = float(val)
+    return str(int(f)) if f == int(f) else f"{f:g}"
+
+
 def fmt_price(price) -> str:
     """Return a human-readable Farsi price string.
 
