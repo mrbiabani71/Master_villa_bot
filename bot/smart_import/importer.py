@@ -42,22 +42,23 @@ def import_villa(data: VillaData, mode: ImportMode = "create") -> ImportResult:
 
 def import_villa_from_channel(data: VillaData) -> ImportResult:
     """
-    Idempotent upsert for the channel history importer.
+    Idempotent upsert for the channel importer — writes directly to SQLite
+    (bot.db), no API server required.
 
     Lookup strategy:
-      1. If telegram_message_id is set → check DB for an existing villa with
-         that message_id.  If found → update it (preserving villa_code/id).
+      1. If telegram_message_id is set → check bot.db for an existing villa
+         with that message_id.  If found → update it (preserving villa_code/id).
       2. If not found (or no message_id) → create a new villa.
 
     Safe to call repeatedly with the same data.
     """
     if data.telegram_message_id is not None:
-        from pg_villas import get_villa_by_telegram_message_id
+        from database import get_villa_by_telegram_message_id
         existing = get_villa_by_telegram_message_id(data.telegram_message_id)
         if existing:
             data.villa_code = existing["villa_code"]
-            return _do_update_by_id(existing["id"], data, existing)
-    return _do_create(data)
+            return _do_update_sqlite(existing["id"], data, existing)
+    return _do_create_sqlite(data)
 
 
 # ── Payload builder ───────────────────────────────────────────────────────────
@@ -249,3 +250,69 @@ def _do_upsert(data: VillaData) -> ImportResult:
     if existing:
         return _do_update_by_id(existing["id"], data, existing)
     return _do_create(data)
+
+
+# ── SQLite helpers (channel import only) ─────────────────────────────────────
+
+def _do_create_sqlite(data: VillaData) -> ImportResult:
+    """
+    Insert a new villa directly into bot.db (SQLite).
+    Used exclusively by import_villa_from_channel.
+    """
+    from database import get_next_villa_code, insert_villa_from_channel
+
+    payload = _build_payload(data)
+    payload["villa_code"] = data.villa_code if data.villa_code else get_next_villa_code()
+
+    try:
+        villa_id = insert_villa_from_channel(payload)
+    except Exception as exc:
+        logger.exception(
+            "smart_import (sqlite): create failed for code=%s", payload.get("villa_code")
+        )
+        return ImportResult(
+            success=False,
+            villa_code=payload.get("villa_code", ""),
+            mode="create",
+            error=f"خطای ذخیره‌سازی: {exc}",
+        )
+
+    villa_code = payload["villa_code"]
+    logger.info(
+        "smart_import (sqlite): created villa code=%s id=%s city=%s price=%s",
+        villa_code, villa_id, data.city, data.price,
+    )
+    return ImportResult(success=True, villa_code=villa_code, villa_id=villa_id, mode="create")
+
+
+def _do_update_sqlite(
+    villa_id: int,
+    data: VillaData,
+    existing: dict,
+) -> ImportResult:
+    """
+    Update an existing villa directly in bot.db (SQLite) by its row id.
+    Used exclusively by import_villa_from_channel.
+    """
+    from database import update_villa_from_channel
+
+    payload = _build_payload(data, existing)
+
+    try:
+        update_villa_from_channel(villa_id, payload)
+    except Exception as exc:
+        logger.exception(
+            "smart_import (sqlite): update failed id=%s code=%s", villa_id, data.villa_code
+        )
+        return ImportResult(
+            success=False,
+            villa_code=data.villa_code,
+            mode="update",
+            error=f"خطای ذخیره‌سازی: {exc}",
+        )
+
+    logger.info(
+        "smart_import (sqlite): updated villa code=%s id=%s city=%s price=%s",
+        data.villa_code, villa_id, data.city, data.price,
+    )
+    return ImportResult(success=True, villa_code=data.villa_code, villa_id=villa_id, mode="update")

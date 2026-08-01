@@ -47,12 +47,23 @@ def init_db() -> None:
             );
         """)
 
-        _add_column_if_missing(conn, "villas", "has_jacuzzi",      "INTEGER NOT NULL DEFAULT 0")
-        _add_column_if_missing(conn, "villas", "has_roof_garden",  "INTEGER NOT NULL DEFAULT 0")
-        _add_column_if_missing(conn, "villas", "has_parking",      "INTEGER NOT NULL DEFAULT 0")
-        _add_column_if_missing(conn, "villas", "has_storage",      "INTEGER NOT NULL DEFAULT 0")
-        _add_column_if_missing(conn, "villas", "master_bedrooms",  "INTEGER DEFAULT 0")
-        _add_column_if_missing(conn, "villas", "updated_at",       "TEXT DEFAULT (datetime('now'))")
+        _add_column_if_missing(conn, "villas", "has_jacuzzi",             "INTEGER NOT NULL DEFAULT 0")
+        _add_column_if_missing(conn, "villas", "has_roof_garden",        "INTEGER NOT NULL DEFAULT 0")
+        _add_column_if_missing(conn, "villas", "has_parking",            "INTEGER NOT NULL DEFAULT 0")
+        _add_column_if_missing(conn, "villas", "has_storage",            "INTEGER NOT NULL DEFAULT 0")
+        _add_column_if_missing(conn, "villas", "master_bedrooms",        "INTEGER DEFAULT 0")
+        _add_column_if_missing(conn, "villas", "updated_at",             "TEXT DEFAULT (datetime('now'))")
+        # Channel-import provenance
+        _add_column_if_missing(conn, "villas", "telegram_message_id",    "INTEGER")
+        _add_column_if_missing(conn, "villas", "telegram_media_group_id","TEXT")
+        _add_column_if_missing(conn, "villas", "original_caption",       "TEXT")
+        # Extended parsed fields
+        _add_column_if_missing(conn, "villas", "region",                 "TEXT")
+        _add_column_if_missing(conn, "villas", "villa_type",             "TEXT")
+        _add_column_if_missing(conn, "villas", "facade",                 "TEXT")
+        _add_column_if_missing(conn, "villas", "utilities",              "TEXT")
+        _add_column_if_missing(conn, "villas", "location_status",        "TEXT")
+        _add_column_if_missing(conn, "villas", "community_status",       "TEXT")
 
         conn.execute("""
             CREATE TABLE IF NOT EXISTS visit_requests (
@@ -110,6 +121,104 @@ def init_db() -> None:
 
 
 # ── Villa queries ──────────────────────────────────────────────────────────────
+
+def get_villa_by_telegram_message_id(telegram_message_id: int) -> dict | None:
+    """Return the villa row whose telegram_message_id matches, or None."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM villas WHERE telegram_message_id = ?",
+            (telegram_message_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def insert_villa_from_channel(data: dict) -> int:
+    """
+    Insert a new villa from a channel import.
+
+    ``data`` is the payload dict produced by _build_payload() in
+    smart_import/importer.py — ``photos`` is already a comma-joined string
+    or None.  Returns the new row id.
+    """
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO villas (
+                villa_code, city, area_type, price,
+                land_size, building_size, bedrooms, master_bedrooms,
+                is_townhouse, has_pool, has_jacuzzi,
+                has_roof_garden, has_parking, has_storage,
+                document_type, description,
+                latitude, longitude,
+                photos, video, status,
+                telegram_message_id, telegram_media_group_id, original_caption,
+                region, villa_type, facade, utilities,
+                location_status, community_status,
+                created_at, updated_at
+            ) VALUES (
+                :villa_code, :city, :area_type, :price,
+                :land_size, :building_size, :bedrooms, :master_bedrooms,
+                :is_townhouse, :has_pool, :has_jacuzzi,
+                :has_roof_garden, :has_parking, :has_storage,
+                :document_type, :description,
+                :latitude, :longitude,
+                :photos, :video, 'published',
+                :telegram_message_id, :telegram_media_group_id, :original_caption,
+                :region, :villa_type, :facade, :utilities,
+                :location_status, :community_status,
+                datetime('now'), datetime('now')
+            )
+            """,
+            {**data, "master_bedrooms": data.get("master_bedrooms") or 0},
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+
+def update_villa_from_channel(villa_id: int, data: dict) -> None:
+    """
+    Update an existing villa from a channel import.
+
+    ``data`` is the payload dict produced by _build_payload() — ``photos``
+    is already a comma-joined string or None.  Fields inherited from the
+    existing row (status, latitude, longitude, video, is_townhouse) are
+    carried through via _build_payload; this function does not touch them
+    explicitly so they remain unchanged.
+    """
+    with get_connection() as conn:
+        conn.execute(
+            """
+            UPDATE villas SET
+                city                    = :city,
+                area_type               = :area_type,
+                price                   = :price,
+                land_size               = :land_size,
+                building_size           = :building_size,
+                bedrooms                = :bedrooms,
+                master_bedrooms         = :master_bedrooms,
+                has_pool                = :has_pool,
+                has_jacuzzi             = :has_jacuzzi,
+                has_roof_garden         = :has_roof_garden,
+                has_parking             = :has_parking,
+                has_storage             = :has_storage,
+                document_type           = :document_type,
+                description             = :description,
+                photos                  = :photos,
+                telegram_media_group_id = :telegram_media_group_id,
+                original_caption        = :original_caption,
+                region                  = :region,
+                villa_type              = :villa_type,
+                facade                  = :facade,
+                utilities               = :utilities,
+                location_status         = :location_status,
+                community_status        = :community_status,
+                updated_at              = datetime('now')
+            WHERE id = :_villa_id
+            """,
+            {**data, "_villa_id": villa_id},
+        )
+        conn.commit()
+
 
 def get_next_villa_code() -> str:
     with get_connection() as conn:
