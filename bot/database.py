@@ -282,21 +282,79 @@ def search_villas(
     max_price: float | None,
     city: str | None = None,
 ) -> list[dict]:
-    query = """
-        SELECT * FROM villas
-        WHERE status = 'published'
-          AND area_type = ?
-          AND price >= ?
-    """
+    conditions = ["status = 'published'", "area_type = ?", "price >= ?"]
     params: list = [area_type, min_price]
     if city:
-        query += " AND city = ?"
+        conditions.append("city = ?")
         params.append(city)
     if max_price is not None:
-        query += " AND price <= ?"
+        conditions.append("price <= ?")
         params.append(max_price)
-    query += " ORDER BY price ASC, created_at DESC"
+    query = "SELECT * FROM villas WHERE " + " AND ".join(conditions) + " ORDER BY price ASC, created_at DESC"
+    with get_connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
 
+
+def advanced_search_villas(
+    area_type: str,
+    min_price: float,
+    max_price: float | None,
+    city: str | None = None,
+    bedrooms: int | None = None,
+    master_bedrooms: int | None = None,
+    has_pool: bool = False,
+    has_jacuzzi: bool = False,
+    has_roof_garden: bool = False,
+    has_parking: bool = False,
+    gated_community: bool = False,
+    document: str | None = None,
+) -> list[dict]:
+    """
+    Advanced villa search with optional amenity/room/document/community filters.
+    All filtering is done in SQL against bot.db — no API server required.
+
+    ``bedrooms`` / ``master_bedrooms`` are minimum thresholds (≥).
+    ``document`` is one of: None, "tak_barg", "parvaneh".
+    ``gated_community`` matches villas whose community_status contains "شهرک".
+    """
+    conditions = ["status = 'published'", "area_type = ?", "price >= ?"]
+    params: list = [area_type, min_price]
+
+    if max_price is not None:
+        conditions.append("price <= ?")
+        params.append(max_price)
+    if city:
+        conditions.append("city = ?")
+        params.append(city)
+    if bedrooms is not None:
+        conditions.append("COALESCE(bedrooms, 0) >= ?")
+        params.append(bedrooms)
+    if master_bedrooms is not None:
+        conditions.append("COALESCE(master_bedrooms, 0) >= ?")
+        params.append(master_bedrooms)
+    if has_pool:
+        conditions.append("has_pool = 1")
+    if has_jacuzzi:
+        conditions.append("has_jacuzzi = 1")
+    if has_roof_garden:
+        conditions.append("has_roof_garden = 1")
+    if has_parking:
+        conditions.append("has_parking = 1")
+    if gated_community:
+        conditions.append("community_status LIKE '%شهرک%'")
+    if document == "tak_barg":
+        conditions.append(
+            "(document_type LIKE '%تک برگ%' OR document_type LIKE '%تک‌برگ%' OR document_type LIKE '%تگ برگ%')"
+        )
+    elif document == "parvaneh":
+        conditions.append("document_type LIKE '%پروانه%'")
+
+    query = (
+        "SELECT * FROM villas WHERE "
+        + " AND ".join(conditions)
+        + " ORDER BY price ASC, created_at DESC"
+    )
     with get_connection() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(row) for row in rows]

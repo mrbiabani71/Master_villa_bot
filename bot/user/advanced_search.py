@@ -32,7 +32,7 @@ from telegram.ext import (
     filters,
 )
 
-from pg_villas import advanced_search_villas
+from database import advanced_search_villas
 from keyboards import get_main_keyboard
 from states import (
     SEARCH_MENU,
