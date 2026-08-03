@@ -42,7 +42,7 @@ from telegram.ext import (
 
 from config import ADMIN_ID
 from keyboards import admin_panel_keyboard, get_main_keyboard
-from pg_villas import admin_search_villas, delete_villa, get_villa_by_id, set_villa_status
+from database import admin_search_villas, delete_villa, get_villa_by_id, set_villa_status
 from states import MV_CONFIRM_DELETE, MV_SEARCH
 
 logger = logging.getLogger(__name__)

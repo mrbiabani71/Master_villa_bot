@@ -360,6 +360,69 @@ def advanced_search_villas(
         return [dict(row) for row in rows]
 
 
+# ── Admin villa management ────────────────────────────────────────────────────
+
+def admin_search_villas(
+    code: str | None = None,
+    city: str | None = None,
+    max_price: float | None = None,
+) -> list[dict]:
+    """
+    Fetch ALL villas (every status) for the admin management panel.
+
+    Filtering is applied in SQL:
+      code      — partial match on villa_code (case-insensitive via LIKE)
+      city      — partial match on city name (LIKE)
+      max_price — inclusive upper bound on price
+
+    Pass no arguments to return the full villa list, newest first.
+    """
+    conditions: list[str] = []
+    params: list = []
+
+    if code:
+        conditions.append("UPPER(villa_code) LIKE UPPER(?)")
+        params.append(f"%{code}%")
+    if city:
+        conditions.append("city LIKE ?")
+        params.append(f"%{city}%")
+    if max_price is not None:
+        conditions.append("price <= ?")
+        params.append(max_price)
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    query = f"SELECT * FROM villas {where} ORDER BY created_at DESC, id DESC"
+
+    with get_connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
+
+
+def delete_villa(villa_id: int) -> bool:
+    """Permanently delete a villa by id. Returns True on success."""
+    try:
+        with get_connection() as conn:
+            conn.execute("DELETE FROM villas WHERE id = ?", (villa_id,))
+            conn.commit()
+        return True
+    except Exception:
+        return False
+
+
+def set_villa_status(villa_id: int, status: str) -> bool:
+    """Update a villa's status field. Returns True on success."""
+    try:
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE villas SET status = ?, updated_at = datetime('now') WHERE id = ?",
+                (status, villa_id),
+            )
+            conn.commit()
+        return True
+    except Exception:
+        return False
+
+
 # ── Visit request queries ──────────────────────────────────────────────────────
 
 def insert_visit_request(
