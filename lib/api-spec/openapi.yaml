@@ -1,0 +1,740 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.2.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: villas
+    description: Villa management
+  - name: requests
+    description: Visit and consultation request management
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /villas:
+    get:
+      operationId: listVillas
+      tags: [villas]
+      summary: List all villas
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/VillaStatus"
+        - name: city
+          in: query
+          schema:
+            type: string
+        - name: area_type
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: telegram_message_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by Telegram message ID (used by the channel importer)
+      responses:
+        "200":
+          description: Paginated list of villas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VillasPage"
+    post:
+      operationId: createVilla
+      tags: [villas]
+      summary: Create a new villa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVillaRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Villa"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /villas/stats:
+    get:
+      operationId: getVillaStats
+      tags: [villas]
+      summary: Get villa statistics summary
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VillaStats"
+
+  /villas/{id}:
+    get:
+      operationId: getVilla
+      tags: [villas]
+      summary: Get villa by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Villa details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Villa"
+        "404":
+          description: Villa not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateVilla
+      tags: [villas]
+      summary: Update all villa fields
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVillaRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Villa"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateVillaStatus
+      tags: [villas]
+      summary: Update villa status only
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVillaStatusRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Villa"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: archiveVilla
+      tags: [villas]
+      summary: Archive a villa — sets status to archived, never permanently deletes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Villa"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /villas/{id}/hard:
+    delete:
+      operationId: hardDeleteVilla
+      tags: [villas]
+      summary: Permanently delete a villa record from the database
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                  id:
+                    type: integer
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /requests:
+    get:
+      operationId: listRequests
+      tags: [requests]
+      summary: List visit/consultation requests
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, contacted]
+        - name: request_type
+          in: query
+          schema:
+            type: string
+            enum: [visit, consultation]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Paginated requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestsPage"
+
+  /requests/stats:
+    get:
+      operationId: getRequestStats
+      tags: [requests]
+      summary: Request statistics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestStats"
+
+  /requests/{id}/contact:
+    post:
+      operationId: markRequestContacted
+      tags: [requests]
+      summary: Mark request as contacted
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VisitRequest"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /requests/{id}:
+    delete:
+      operationId: deleteRequest
+      tags: [requests]
+      summary: Delete a request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    VillaStatus:
+      type: string
+      enum: [draft, published, sold, archived, inactive]
+
+    Villa:
+      type: object
+      properties:
+        id:
+          type: integer
+        villa_code:
+          type: string
+        city:
+          type: string
+          nullable: true
+        area_type:
+          type: string
+          nullable: true
+        price:
+          type: number
+          nullable: true
+        land_size:
+          type: number
+          nullable: true
+        building_size:
+          type: number
+          nullable: true
+        bedrooms:
+          type: integer
+          nullable: true
+        master_bedrooms:
+          type: integer
+          nullable: true
+        is_townhouse:
+          type: integer
+        has_pool:
+          type: integer
+        has_jacuzzi:
+          type: integer
+        has_roof_garden:
+          type: integer
+        has_parking:
+          type: integer
+        has_storage:
+          type: integer
+        document_type:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        photos:
+          type: string
+          nullable: true
+        video:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/VillaStatus"
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required:
+        - id
+        - villa_code
+        - is_townhouse
+        - has_pool
+        - has_jacuzzi
+        - has_roof_garden
+        - has_parking
+        - has_storage
+        - status
+        - created_at
+        - updated_at
+
+    CreateVillaRequest:
+      type: object
+      properties:
+        villa_code:
+          type: string
+          nullable: true
+          description: >
+            Optional MV code (e.g. "MV-1042"). When provided the server uses
+            it as-is and skips auto-generation. When omitted the server assigns
+            the next available code automatically.
+        city:
+          type: string
+          nullable: true
+        area_type:
+          type: string
+          nullable: true
+        price:
+          type: number
+          nullable: true
+        land_size:
+          type: number
+          nullable: true
+        building_size:
+          type: number
+          nullable: true
+        bedrooms:
+          type: integer
+          nullable: true
+        master_bedrooms:
+          type: integer
+          nullable: true
+        is_townhouse:
+          type: integer
+          default: 0
+        has_pool:
+          type: integer
+          default: 0
+        has_jacuzzi:
+          type: integer
+          default: 0
+        has_roof_garden:
+          type: integer
+          default: 0
+        has_parking:
+          type: integer
+          default: 0
+        has_storage:
+          type: integer
+          default: 0
+        document_type:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        photos:
+          type: string
+          nullable: true
+        video:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/VillaStatus"
+        telegram_message_id:
+          type: integer
+          nullable: true
+          description: >
+            Telegram message ID of the channel post this villa was imported
+            from. Used to idempotently match edits of the same post to the
+            existing villa instead of creating a duplicate.
+        telegram_media_group_id:
+          type: string
+          nullable: true
+        original_caption:
+          type: string
+          nullable: true
+
+    UpdateVillaRequest:
+      type: object
+      properties:
+        city:
+          type: string
+          nullable: true
+        area_type:
+          type: string
+          nullable: true
+        price:
+          type: number
+          nullable: true
+        land_size:
+          type: number
+          nullable: true
+        building_size:
+          type: number
+          nullable: true
+        bedrooms:
+          type: integer
+          nullable: true
+        master_bedrooms:
+          type: integer
+          nullable: true
+        is_townhouse:
+          type: integer
+          nullable: true
+        has_pool:
+          type: integer
+          nullable: true
+        has_jacuzzi:
+          type: integer
+          nullable: true
+        has_roof_garden:
+          type: integer
+          nullable: true
+        has_parking:
+          type: integer
+          nullable: true
+        has_storage:
+          type: integer
+          nullable: true
+        document_type:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        photos:
+          type: string
+          nullable: true
+        video:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/VillaStatus"
+        telegram_message_id:
+          type: integer
+          nullable: true
+        telegram_media_group_id:
+          type: string
+          nullable: true
+        original_caption:
+          type: string
+          nullable: true
+
+    UpdateVillaStatusRequest:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/VillaStatus"
+      required:
+        - status
+
+    VillaStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        published:
+          type: integer
+        draft:
+          type: integer
+        sold:
+          type: integer
+        archived:
+          type: integer
+        by_city:
+          type: array
+          items:
+            type: object
+            properties:
+              city:
+                type: string
+              count:
+                type: integer
+            required:
+              - city
+              - count
+        by_price_tier:
+          type: array
+          items:
+            type: object
+            properties:
+              tier:
+                type: string
+              count:
+                type: integer
+            required:
+              - tier
+              - count
+      required:
+        - total
+        - published
+        - draft
+        - sold
+        - archived
+        - by_city
+        - by_price_tier
+
+    VillasPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Villa"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+      required:
+        - data
+        - total
+        - page
+        - page_size
+
+    VisitRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+        villa_code:
+          type: string
+        user_id:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: string
+        area_type:
+          type: string
+          nullable: true
+        request_type:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+        price:
+          type: number
+          nullable: true
+        villa_city:
+          type: string
+          nullable: true
+      required:
+        - id
+        - villa_code
+        - user_id
+        - name
+        - phone
+        - request_type
+        - status
+        - created_at
+
+    RequestsPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/VisitRequest"
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+      required:
+        - data
+        - total
+        - page
+        - page_size
+
+    RequestStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        pending:
+          type: integer
+        contacted:
+          type: integer
+        visit_count:
+          type: integer
+        consultation_count:
+          type: integer
+      required:
+        - total
+        - pending
+        - contacted
+        - visit_count
+        - consultation_count

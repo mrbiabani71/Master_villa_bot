@@ -1,0 +1,731 @@
+import sqlite3
+import os
+
+DB_PATH = os.path.join(os.path.dirname(__file__), "bot.db")
+
+
+def get_connection() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+class _DatabaseWrapper:
+    @staticmethod
+    def _ensure_stats_table(conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS stats (
+                key TEXT PRIMARY KEY,
+                value INTEGER
+            )
+            """
+        )
+
+    def get_stat(self, key):
+        with get_connection() as conn:
+            self._ensure_stats_table(conn)
+            row = conn.execute(
+                "SELECT value FROM stats WHERE key = ?",
+                (key,),
+            ).fetchone()
+            return row["value"] if row else None
+
+    def set_stat(self, key, value):
+        with get_connection() as conn:
+            self._ensure_stats_table(conn)
+            conn.execute(
+                """
+                INSERT INTO stats (key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (key, value),
+            )
+
+    def get_stats_by_prefix(self, prefix):
+        with get_connection() as conn:
+            self._ensure_stats_table(conn)
+            rows = conn.execute(
+                "SELECT key, value FROM stats WHERE key LIKE ? ORDER BY key",
+                (f"{prefix}%",),
+            ).fetchall()
+            return {row["key"]: row["value"] for row in rows}
+
+
+db = _DatabaseWrapper()
+
+
+def get_stat(key):
+    return db.get_stat(key)
+
+
+def set_stat(key, value):
+    db.set_stat(key, value)
+
+
+def get_stats_by_prefix(prefix):
+    return db.get_stats_by_prefix(prefix)
+
+
+def _add_column_if_missing(
+    conn: sqlite3.Connection, table: str, column: str, definition: str
+) -> None:
+    try:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    except sqlite3.OperationalError:
+        pass
+
+import sqlite3
+import os
+
+DB_PATH = os.path.join(os.path.dirname(__file__), "bot.db")
+
+
+def get_connection() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _add_column_if_missing(
+    conn: sqlite3.Connection, table: str, column: str, definition: str
+) -> None:
+    try:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    except sqlite3.OperationalError:
+        pass
+
+
+def init_db() -> None:
+    with get_connection() as conn:
+        conn.execute("PRAGMA journal_mode=WAL;")
+
+        # جدول ویلاها
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS villas (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                villa_code    TEXT UNIQUE NOT NULL,
+                city          TEXT,
+                area_type     TEXT,
+                price         REAL,
+                land_size     REAL,
+                building_size REAL,
+                bedrooms      INTEGER,
+                is_townhouse  INTEGER NOT NULL DEFAULT 0,
+                has_pool      INTEGER NOT NULL DEFAULT 0,
+                document_type TEXT,
+                description   TEXT,
+                latitude      REAL,
+                longitude     REAL,
+                photos        TEXT,
+                video         TEXT,
+                status        TEXT NOT NULL DEFAULT 'published',
+                created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+        """)
+
+        # جدول لاگ فعالیت‌ها
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS activity_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT,
+                villa_id INTEGER,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
+        # جدول کاربران
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_active DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
+        conn.commit()    
+        _add_column_if_missing(conn, "villas", "has_jacuzzi",             "INTEGER NOT NULL DEFAULT 0")
+        _add_column_if_missing(conn, "villas", "has_roof_garden",        "INTEGER NOT NULL DEFAULT 0")
+        _add_column_if_missing(conn, "villas", "has_parking",            "INTEGER NOT NULL DEFAULT 0")
+        _add_column_if_missing(conn, "villas", "has_storage",            "INTEGER NOT NULL DEFAULT 0")
+        _add_column_if_missing(conn, "villas", "master_bedrooms",        "INTEGER DEFAULT 0")
+        _add_column_if_missing(conn, "villas", "updated_at",             "TEXT DEFAULT (datetime('now'))")
+        # Channel-import provenance
+        _add_column_if_missing(conn, "villas", "telegram_message_id",    "INTEGER")
+        _add_column_if_missing(conn, "villas", "telegram_media_group_id","TEXT")
+        _add_column_if_missing(conn, "villas", "original_caption",       "TEXT")
+        # Extended parsed fields
+        _add_column_if_missing(conn, "villas", "region",                 "TEXT")
+        _add_column_if_missing(conn, "villas", "villa_type",             "TEXT")
+        _add_column_if_missing(conn, "villas", "facade",                 "TEXT")
+        _add_column_if_missing(conn, "villas", "utilities",              "TEXT")
+        _add_column_if_missing(conn, "villas", "location_status",        "TEXT")
+        _add_column_if_missing(conn, "villas", "community_status",       "TEXT")
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS visit_requests (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                villa_code   TEXT NOT NULL,
+                user_id      INTEGER NOT NULL,
+                name         TEXT NOT NULL,
+                phone        TEXT NOT NULL,
+                area_type    TEXT DEFAULT '',
+                request_type TEXT DEFAULT 'visit',
+                status       TEXT DEFAULT 'pending',
+                created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+        """)
+
+        # Safe migrations for existing rows
+        _add_column_if_missing(conn, "visit_requests", "area_type",    "TEXT DEFAULT ''")
+        _add_column_if_missing(conn, "visit_requests", "request_type", "TEXT DEFAULT 'visit'")
+        _add_column_if_missing(conn, "visit_requests", "status",       "TEXT DEFAULT 'pending'")
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS favorites (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL,
+                villa_id   INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(user_id, villa_id)
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS compare_list (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL,
+                villa_id   INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(user_id, villa_id)
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS notification_prefs (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER UNIQUE NOT NULL,
+                area_type  TEXT,
+                min_price  REAL,
+                max_price  REAL,
+                villa_type TEXT,
+                active     INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+
+        conn.commit()
+
+
+# ── Villa queries ──────────────────────────────────────────────────────────────
+
+def get_villa_by_telegram_message_id(telegram_message_id: int) -> dict | None:
+    """Return the villa row whose telegram_message_id matches, or None."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM villas WHERE telegram_message_id = ?",
+            (telegram_message_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def insert_villa_from_channel(data: dict) -> int:
+    """
+    Insert a new villa from a channel import.
+
+    ``data`` is the payload dict produced by _build_payload() in
+    smart_import/importer.py — ``photos`` is already a comma-joined string
+    or None.  Returns the new row id.
+    """
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO villas (
+                villa_code, city, area_type, price,
+                land_size, building_size, bedrooms, master_bedrooms,
+                is_townhouse, has_pool, has_jacuzzi,
+                has_roof_garden, has_parking, has_storage,
+                document_type, description,
+                latitude, longitude,
+                photos, video, status,
+                telegram_message_id, telegram_media_group_id, original_caption,
+                region, villa_type, facade, utilities,
+                location_status, community_status,
+                created_at, updated_at
+            ) VALUES (
+                :villa_code, :city, :area_type, :price,
+                :land_size, :building_size, :bedrooms, :master_bedrooms,
+                :is_townhouse, :has_pool, :has_jacuzzi,
+                :has_roof_garden, :has_parking, :has_storage,
+                :document_type, :description,
+                :latitude, :longitude,
+                :photos, :video, 'published',
+                :telegram_message_id, :telegram_media_group_id, :original_caption,
+                :region, :villa_type, :facade, :utilities,
+                :location_status, :community_status,
+                datetime('now'), datetime('now')
+            )
+            """,
+            {**data, "master_bedrooms": data.get("master_bedrooms") or 0},
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+
+def update_villa_from_channel(villa_id: int, data: dict) -> None:
+    """
+    Update an existing villa from a channel import.
+
+    ``data`` is the payload dict produced by _build_payload() — ``photos``
+    is already a comma-joined string or None.  Fields inherited from the
+    existing row (status, latitude, longitude, video, is_townhouse) are
+    carried through via _build_payload; this function does not touch them
+    explicitly so they remain unchanged.
+    """
+    with get_connection() as conn:
+        conn.execute(
+            """
+            UPDATE villas SET
+                city                    = :city,
+                area_type               = :area_type,
+                price                   = :price,
+                land_size               = :land_size,
+                building_size           = :building_size,
+                bedrooms                = :bedrooms,
+                master_bedrooms         = :master_bedrooms,
+                has_pool                = :has_pool,
+                has_jacuzzi             = :has_jacuzzi,
+                has_roof_garden         = :has_roof_garden,
+                has_parking             = :has_parking,
+                has_storage             = :has_storage,
+                document_type           = :document_type,
+                description             = :description,
+                photos                  = :photos,
+                telegram_media_group_id = :telegram_media_group_id,
+                original_caption        = :original_caption,
+                region                  = :region,
+                villa_type              = :villa_type,
+                facade                  = :facade,
+                utilities               = :utilities,
+                location_status         = :location_status,
+                community_status        = :community_status,
+                updated_at              = datetime('now')
+            WHERE id = :_villa_id
+            """,
+            {**data, "_villa_id": villa_id},
+        )
+        conn.commit()
+
+
+def get_next_villa_code() -> str:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT MAX(CAST(SUBSTR(villa_code, 4) AS INTEGER)) AS max_num FROM villas"
+        ).fetchone()
+        next_num = (row["max_num"] or 1000) + 1
+        return f"MV-{next_num}"
+
+
+def insert_villa(data: dict) -> int:
+    photos_str = ",".join(data.get("photos") or [])
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO villas (
+                villa_code, city, area_type, price,
+                land_size, building_size, bedrooms, master_bedrooms,
+                is_townhouse, has_pool, has_jacuzzi,
+                has_roof_garden, has_parking, has_storage,
+                document_type, description,
+                latitude, longitude,
+                photos, video, status,
+                created_at, updated_at
+            ) VALUES (
+                :villa_code, :city, :area_type, :price,
+                :land_size, :building_size, :bedrooms, :master_bedrooms,
+                :is_townhouse, :has_pool, :has_jacuzzi,
+                :has_roof_garden, :has_parking, :has_storage,
+                :document_type, :description,
+                :latitude, :longitude,
+                :photos_str, :video, 'published',
+                datetime('now'), datetime('now')
+            )
+            """,
+            {**data, "photos_str": photos_str, "master_bedrooms": data.get("master_bedrooms") or 0},
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+
+def get_villa_by_id(villa_id: int) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM villas WHERE id = ?", (villa_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def get_all_villas() -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM villas ORDER BY id ASC"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def get_villa_by_code(villa_code: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM villas WHERE villa_code = ?", (villa_code,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def search_villas(
+    area_type: str,
+    min_price: float,
+    max_price: float | None,
+    city: str | None = None,
+) -> list[dict]:
+    conditions = ["status = 'published'", "area_type = ?", "price >= ?"]
+    params: list = [area_type, min_price]
+    if city:
+        conditions.append("city = ?")
+        params.append(city)
+    if max_price is not None:
+        conditions.append("price <= ?")
+        params.append(max_price)
+    query = "SELECT * FROM villas WHERE " + " AND ".join(conditions) + " ORDER BY price ASC, created_at DESC"
+    with get_connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
+
+
+def advanced_search_villas(
+    area_type: str,
+    min_price: float,
+    max_price: float | None,
+    city: str | None = None,
+    bedrooms: int | None = None,
+    master_bedrooms: int | None = None,
+    has_pool: bool = False,
+    has_jacuzzi: bool = False,
+    has_roof_garden: bool = False,
+    has_parking: bool = False,
+    gated_community: bool = False,
+    document: str | None = None,
+) -> list[dict]:
+    """
+    Advanced villa search with optional amenity/room/document/community filters.
+    All filtering is done in SQL against bot.db — no API server required.
+
+    ``bedrooms`` / ``master_bedrooms`` are minimum thresholds (≥).
+    ``document`` is one of: None, "tak_barg", "parvaneh".
+    ``gated_community`` matches villas whose community_status contains "شهرک".
+    """
+    conditions = ["status = 'published'", "area_type = ?", "price >= ?"]
+    params: list = [area_type, min_price]
+
+    if max_price is not None:
+        conditions.append("price <= ?")
+        params.append(max_price)
+    if city:
+        conditions.append("city = ?")
+        params.append(city)
+    if bedrooms is not None:
+        conditions.append("COALESCE(bedrooms, 0) >= ?")
+        params.append(bedrooms)
+    if master_bedrooms is not None:
+        conditions.append("COALESCE(master_bedrooms, 0) >= ?")
+        params.append(master_bedrooms)
+    if has_pool:
+        conditions.append("has_pool = 1")
+    if has_jacuzzi:
+        conditions.append("has_jacuzzi = 1")
+    if has_roof_garden:
+        conditions.append("has_roof_garden = 1")
+    if has_parking:
+        conditions.append("has_parking = 1")
+    if gated_community:
+        conditions.append("community_status LIKE '%شهرک%'")
+    if document == "tak_barg":
+        conditions.append(
+            "(document_type LIKE '%تک برگ%' OR document_type LIKE '%تک‌برگ%' OR document_type LIKE '%تگ برگ%')"
+        )
+    elif document == "parvaneh":
+        conditions.append("document_type LIKE '%پروانه%'")
+
+    query = (
+        "SELECT * FROM villas WHERE "
+        + " AND ".join(conditions)
+        + " ORDER BY price ASC, created_at DESC"
+    )
+    with get_connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
+
+
+# ── Visit request queries ──────────────────────────────────────────────────────
+
+def insert_visit_request(
+    villa_code: str,
+    user_id: int,
+    name: str,
+    phone: str,
+    area_type: str = "",
+    request_type: str = "visit",
+) -> int:
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO visit_requests
+                (villa_code, user_id, name, phone, area_type, request_type, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, 'pending', datetime('now'))
+            """,
+            (villa_code, user_id, name, phone, area_type, request_type),
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+
+def get_requests(
+    page: int,
+    page_size: int = 1,
+    status_filter: str | None = None,
+    type_filter: str | None = None,
+) -> list[dict]:
+    conditions = []
+    params: list = []
+
+    if status_filter:
+        conditions.append("r.status = ?")
+        params.append(status_filter)
+    if type_filter:
+        conditions.append("r.request_type = ?")
+        params.append(type_filter)
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+    query = f"""
+        SELECT
+            r.id, r.villa_code, r.user_id, r.name, r.phone,
+            r.area_type, r.request_type, r.status, r.created_at,
+            v.price, v.city AS villa_city
+        FROM visit_requests r
+        LEFT JOIN villas v ON r.villa_code = v.villa_code
+        {where}
+        ORDER BY r.created_at DESC, r.id DESC
+        LIMIT ? OFFSET ?
+    """
+    params += [page_size, page * page_size]
+
+    with get_connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
+
+
+def get_requests_count(
+    status_filter: str | None = None,
+    type_filter: str | None = None,
+) -> int:
+    conditions = []
+    params: list = []
+
+    if status_filter:
+        conditions.append("status = ?")
+        params.append(status_filter)
+    if type_filter:
+        conditions.append("request_type = ?")
+        params.append(type_filter)
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    with get_connection() as conn:
+        row = conn.execute(
+            f"SELECT COUNT(*) AS cnt FROM visit_requests {where}", params
+        ).fetchone()
+        return row["cnt"]
+
+
+def mark_request_contacted(req_id: int) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE visit_requests SET status = 'contacted' WHERE id = ?", (req_id,)
+        )
+        conn.commit()
+
+
+def delete_request(req_id: int) -> None:
+    with get_connection() as conn:
+        conn.execute("DELETE FROM visit_requests WHERE id = ?", (req_id,))
+        conn.commit()
+
+
+# ── Favorites queries ──────────────────────────────────────────────────────────
+
+def add_favorite(user_id: int, villa_id: int) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO favorites (user_id, villa_id) VALUES (?, ?)",
+            (user_id, villa_id),
+        )
+        conn.commit()
+
+
+def remove_favorite(user_id: int, villa_id: int) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "DELETE FROM favorites WHERE user_id = ? AND villa_id = ?",
+            (user_id, villa_id),
+        )
+        conn.commit()
+
+
+def is_favorite(user_id: int, villa_id: int) -> bool:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM favorites WHERE user_id = ? AND villa_id = ?",
+            (user_id, villa_id),
+        ).fetchone()
+        return row is not None
+
+
+def get_user_favorites(user_id: int) -> list[int]:
+    """Return villa_ids saved by user, most recently added first."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT villa_id FROM favorites WHERE user_id = ? ORDER BY created_at DESC",
+            (user_id,),
+        ).fetchall()
+        return [row["villa_id"] for row in rows]
+
+
+# ── Compare queries ────────────────────────────────────────────────────────────
+
+def add_compare(user_id: int, villa_id: int) -> bool:
+    """Add villa to compare list. Returns False if already at 3-villa limit."""
+    with get_connection() as conn:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM compare_list WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()[0]
+        if count >= 3:
+            return False
+        conn.execute(
+            "INSERT OR IGNORE INTO compare_list (user_id, villa_id) VALUES (?, ?)",
+            (user_id, villa_id),
+        )
+        conn.commit()
+        return True
+
+
+def remove_compare(user_id: int, villa_id: int) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "DELETE FROM compare_list WHERE user_id = ? AND villa_id = ?",
+            (user_id, villa_id),
+        )
+        conn.commit()
+
+
+def is_in_compare(user_id: int, villa_id: int) -> bool:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM compare_list WHERE user_id = ? AND villa_id = ?",
+            (user_id, villa_id),
+        ).fetchone()
+        return row is not None
+
+
+def get_user_compare(user_id: int) -> list[int]:
+    """Return villa_ids in compare list, oldest first."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT villa_id FROM compare_list WHERE user_id = ? ORDER BY created_at ASC",
+            (user_id,),
+        ).fetchall()
+        return [row["villa_id"] for row in rows]
+
+
+def clear_compare(user_id: int) -> None:
+    with get_connection() as conn:
+        conn.execute("DELETE FROM compare_list WHERE user_id = ?", (user_id,))
+        conn.commit()
+
+
+# ── Notification preferences ───────────────────────────────────────────────────
+
+def save_notification_prefs(
+    user_id: int,
+    area_type: str | None,
+    min_price: float | None,
+    max_price: float | None,
+    villa_type: str | None,
+) -> None:
+    """Upsert: creates a new row or replaces existing one for this user."""
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO notification_prefs (user_id, area_type, min_price, max_price, villa_type, active)
+            VALUES (?, ?, ?, ?, ?, 1)
+            ON CONFLICT(user_id) DO UPDATE SET
+                area_type  = excluded.area_type,
+                min_price  = excluded.min_price,
+                max_price  = excluded.max_price,
+                villa_type = excluded.villa_type,
+                active     = 1
+            """,
+            (user_id, area_type, min_price, max_price, villa_type),
+        )
+        conn.commit()
+
+
+def get_notification_prefs(user_id: int) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM notification_prefs WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def get_all_active_prefs() -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM notification_prefs WHERE active = 1"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def deactivate_notification_prefs(user_id: int) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE notification_prefs SET active = 0 WHERE user_id = ?",
+            (user_id,),
+        )
+        conn.commit()
+
+
+# ── NEW: register_user ─────────────────────────────────────────────────────────
+
+def register_user(user_id: int) -> None:
+    with get_connection() as conn:
+        conn.execute("""
+            INSERT INTO users (user_id, first_seen, last_active)
+            VALUES (?, datetime('now'), datetime('now'))
+            ON CONFLICT(user_id) DO UPDATE SET
+                last_active = datetime('now')
+        """, (user_id,))
+        conn.commit()
+
+
+# ── NEW: log_activity ─────────────────────────────────────────────────────────
+
+def log_activity(activity_type: str, villa_id: int | None = None) -> None:
+    with get_connection() as conn:
+        conn.execute("""
+            INSERT INTO activity_log (type, villa_id, timestamp)
+            VALUES (?, ?, datetime('now'))
+        """, (activity_type, villa_id))
+        conn.commit()

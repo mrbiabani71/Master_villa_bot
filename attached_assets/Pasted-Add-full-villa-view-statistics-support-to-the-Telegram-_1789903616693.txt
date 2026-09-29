@@ -1,0 +1,78 @@
+Add full villa view statistics support to the Telegram bot, using the existing shared database wrapper in bot/database_main.py. Implement it in four steps, without changing any unrelated logic.
+
+1) In the function that sends villa details to the user (the handler that shows a villa card when a specific villa is selected), add a lightweight view counter using the shared db wrapper:
+
+- Import the stat helpers at the top of that file or inside the function:
+
+from bot.database_main import get_stat, set_stat
+
+- After successfully sending the villa details message to the user (right after reply_text / send_message), add:
+
+key = f"view_{villa_id}"
+current = get_stat(key) or 0
+set_stat(key, current + 1)
+
+Do not modify any other behavior of the villa details handler.
+
+2) In bot/admin/stats.py, create a helper function to build a formatted villa views report:
+
+- Import the required helpers at the top of bot/admin/stats.py:
+
+from bot.database_main import get_stat, get_all_villas
+
+- Add a new function:
+
+def get_villa_views_stats() -> str:
+    """
+    Returns a multiline text with villa view statistics.
+    """
+    villas = get_all_villas()
+    if not villas:
+        return "هیچ ویلا ثبت نشده است."
+
+    lines = []
+
+    for villa in villas:
+        vid = villa.get("id") or villa.get("villa_id")
+        if vid is None:
+            continue
+
+        key = f"view_{vid}"
+        count = get_stat(key) or 0
+
+        name = villa.get("title") or villa.get("name") or f"ویلا {vid}"
+        lines.append(f"- {name}: {count} بازدید")
+
+    return "\n".join(lines)
+
+Do not change any other admin stats logic.
+
+3) Still in bot/admin/stats.py, update get_stats_message() to include the villa views section:
+
+- Ensure get_stats_message() uses the existing search_count stat and then appends the villa views report. For example:
+
+def get_stats_message() -> str:
+    search_count = get_stat("search_count") or 0
+    villa_views_text = get_villa_views_stats()
+
+    return (
+        "📊 آمار ربات\n\n"
+        f"🔍 تعداد جستجوها: {search_count}\n\n"
+        "🏡 بازدید ویلاها:\n"
+        f"{villa_views_text}\n"
+    )
+
+Do not modify unrelated parts of the file.
+
+4) Make sure the admin stats button actually sends this updated stats message:
+
+- In the handler that processes the admin “آمار 📊” button (handle_stats_button in bot/admin/stats.py or bot/admin/panel.py), ensure it calls get_stats_message() and sends the result:
+
+text = get_stats_message()
+await update.message.reply_text(text)
+
+Do not change any other admin panel handlers.
+
+After applying all changes, run a syntax/import check and restart the Telegram Bot workflow to verify that:
+- villa views are counted whenever a villa card is shown,
+- the stats panel displays both search_count and the villa views list without errors.

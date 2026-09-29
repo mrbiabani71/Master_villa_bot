@@ -1,0 +1,72 @@
+modules = ["nodejs-20", "python-3.12", "web"]
+
+[deployment]
+router = "application"
+deploymentTarget = "autoscale"
+
+[deployment.postBuild]
+args = ["pnpm", "store", "prune"]
+env = { "CI" = "true" }
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Telegram Bot"
+
+[[workflows.workflow]]
+name = "Telegram Bot"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python3 bot/main.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[agent]
+stack = "BEST_EFFORT_FALLBACK"
+expertMode = true
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
+
+[nix]
+channel = "stable-25_05"
+
+[[ports]]
+localPort = 3000
+externalPort = 3000
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 8081
+
+[[ports]]
+localPort = 20130
+externalPort = 3001
+
+[userenv]
+
+[userenv.shared]
+ADMIN_ID = "75515550"
+CHANNEL_ID = "-1004187733480"
+TELEGRAM_BOT_TOKEN = "8951313123:AAHN0_d6Ht7MXEMsZVAwF0WqlywXzR7oZ5s"
+TELEGRAM_API_ID = "33117338"
+TELEGRAM_API_HASH = "529050c0d4fac21b0e9e9bc42eb4b14c"
