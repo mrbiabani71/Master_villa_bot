@@ -97,8 +97,19 @@ def _add_column_if_missing(
         pass
 
 
+def create_villa_photos_table(cursor):
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS villa_photos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            villa_id INTEGER,
+            photo_path TEXT
+        )
+    """)
+
+
 def init_db() -> None:
     with get_connection() as conn:
+        cursor = conn.cursor()
         conn.execute("PRAGMA journal_mode=WAL;")
 
         # جدول ویلاها
@@ -215,6 +226,8 @@ def init_db() -> None:
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
         """)
+
+        create_villa_photos_table(cursor)
 
         conn.commit()
 
