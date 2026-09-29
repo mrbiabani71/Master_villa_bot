@@ -1,3 +1,7 @@
+from PIL import Image
+import imagehash
+
+
 def fmt_size(val) -> str:
     """Format a numeric size, stripping trailing .0: 250.0 → '250', 123.5 → '123.5'."""
     if val is None:
@@ -57,3 +61,17 @@ def increment_stat(key):
         db.set_stat(key, 1)
     else:
         db.set_stat(key, current + 1)
+
+
+def get_image_hash(image_path):
+    try:
+        img = Image.open(image_path)
+        return imagehash.phash(img)
+    except:
+        return None
+
+
+def compare_hash(hash1, hash2):
+    if hash1 is None or hash2 is None:
+        return 100
+    return hash1 - hash2
